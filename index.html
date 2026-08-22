@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="referrer" content="no-referrer" />
+<title>會員照片快速修圖工具 V12</title>
+<link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+<div class="app" id="app">
+  <header>
+    <h1>會員照片快速修圖工具 V12</h1>
+    <div id="faceModelStatus" class="model-status loading" title="MediaPipe Face Landmarker 狀態">
+      <span class="model-dot"></span>
+      <span id="faceModelStatusText">MediaPipe 載入中…</span>
+    </div>
+    <div class="header-tools">
+      <div class="mode-switch" aria-label="處理模式">
+        <button id="singleModeBtn" class="active" type="button">單張修圖</button>
+        <button id="batchModeBtn" type="button">批次處理</button>
+      </div>
+      <div class="zoom-control" aria-label="預覽縮放">
+        <span class="zoom-title">檢視縮放</span>
+        <button id="zoomOutBtn" type="button" title="縮小" disabled>−</button>
+        <input id="zoomRange" type="range" min="10" max="400" step="5" value="100" disabled />
+        <output id="zoomVal">100%</output>
+        <button id="zoomInBtn" type="button" title="放大" disabled>＋</button>
+        <button id="fitZoomBtn" type="button" disabled>適合視窗</button>
+      </div>
+      <button id="openBtn" class="primary">上傳照片</button>
+      <input id="fileInput" type="file" accept="image/*" hidden />
+      <input id="batchFileInput" type="file" accept="image/*" multiple hidden />
+      <button id="resetAllBtn" disabled>還原原圖</button>
+    </div>
+  </header>
+
+  <main class="layout" id="mainLayout">
+    <aside class="panel left">
+      <div id="batchPanel" class="batch-panel" hidden>
+        <h2>批次照片</h2>
+        <div class="batch-actions">
+          <button id="batchAddBtn" class="primary">＋ 加入多張照片</button>
+          <div class="row">
+            <button id="batchPrevBtn" disabled>← 上一張</button>
+            <button id="batchNextBtn" disabled>下一張 →</button>
+          </div>
+          <button id="batchCropBtn" disabled>🎯 全批自動裁成 2 吋</button>
+          <div class="row">
+            <button id="batchAutoBtn" disabled>全批智慧提亮</button>
+            <button id="batchCleanBtn" disabled>全批臉部去污</button>
+          </div>
+          <button id="batchDoneBtn" disabled>✓ 標記完成</button>
+          <button id="batchZipBtn" disabled>下載全部 JPG（ZIP）</button>
+          <button id="batchClearBtn" class="danger" disabled>清空批次清單</button>
+        </div>
+        <div class="batch-summary" style="margin-top:9px">
+          <span id="batchCount">共 0 張</span>
+          <span id="batchDoneCount">完成 0 張</span>
+        </div>
+        <div id="batchProgress" class="batch-progress"></div>
+        <div id="batchList" class="batch-list" style="margin-top:9px"></div>
+        <div class="small" style="margin-top:8px">
+          批次模式會逐張載入照片。「全批自動裁成 2 吋」由 MediaPipe Landmark 逐張定位臉部，再直接套用 3.5×4.5 比例；無法辨識臉部的照片會跳過。
+        </div>
+      </div>
+
+      <h2>基本操作</h2>
+      <div class="toolbar">
+        <button id="rotateLeftBtn" disabled>↶ 左轉 90°</button>
+        <button id="rotateRightBtn" disabled>↷ 右轉 90°</button>
+        <button id="autoHeadshotCropBtn" disabled>🎯 自動裁成 2 吋</button>
+        <button id="cropBtn" disabled>✂ 裁切模式</button>
+        <button id="applyCropBtn" class="primary" disabled>套用裁切</button>
+        <button id="cancelCropBtn" disabled>取消裁切</button>
+      </div>
+
+      <div class="group">
+        <h2>裁切比例</h2>
+        <select id="cropRatio" disabled>
+          <option value="free">自由裁切</option>
+          <option value="1">1 : 1　正方形</option>
+          <option value="0.6666666667">2 : 3　直式</option>
+          <option value="0.75">3 : 4　直式</option>
+          <option value="0.7777777778">2 吋大頭照　3.5 × 4.5 公分</option>
+          <option value="0.8">4 : 5　直式</option>
+          <option value="1.7777777778">16 : 9　橫式</option>
+        </select>
+        <div class="small">選擇固定比例後，拖曳四角或上下左右手把都會維持該比例。</div>
+        <div class="small">「🎯 自動裁成 2 吋」會依台灣 2 吋大頭照方向產生建議裁切框：3.5 × 4.5 公分、頭頂至下顎約佔照片高度 70%～80%（預設 75%），你仍可再微調後套用。</div>
+        <div class="mp-note">V12 使用 MediaPipe Face Landmarker 定位五官與臉部輪廓；頭頂位置則由 Landmark 定位後再向上分析頭髮／背景邊界。</div>
+      </div>
+
+      <div class="group">
+        <h2>輸出尺寸</h2>
+        <select id="presetSize">
+          <option value="original">原始尺寸</option>
+          <option value="1200x1600">1200 × 1600</option>
+          <option value="900x1200">900 × 1200</option>
+          <option value="800x800">800 × 800</option>
+          <option value="custom">自訂尺寸</option>
+        </select>
+        <div class="value-grid">
+          <input id="outW" type="number" min="1" placeholder="寬度" disabled />
+          <span>×</span>
+          <input id="outH" type="number" min="1" placeholder="高度" disabled />
+        </div>
+        <label class="small"><input id="keepRatio" type="checkbox" checked /> 維持原圖比例</label>
+      </div>
+
+      <div class="group">
+        <h2>照片資訊</h2>
+        <div class="meta" id="meta">尚未載入照片</div>
+      </div>
+
+      <div class="hint">照片會直接在目前瀏覽器內處理，不會自動上傳到任何伺服器。</div>
+    </aside>
+
+    <section class="panel stage-panel" id="dropZone">
+      <div class="stage-top">
+        <strong id="modeText">預覽</strong>
+        <span class="small" id="stageHint">可拖曳圖片到中央區域；放大僅影響檢視，不會改變照片尺寸</span>
+      </div>
+      <div class="stage" id="stageArea">
+        <div id="empty" class="empty">
+          <div style="font-size:44px">🖼️</div>
+          點「上傳照片」或將照片拖曳到這裡
+        </div>
+        <div class="canvas-wrap" id="canvasWrap" hidden>
+          <canvas id="preview"></canvas>
+          <canvas id="overlay"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel right">
+      <h2>影像調整</h2>
+
+      <div class="group" style="margin-top:0;padding-top:0;border-top:0">
+        <div>
+          <div class="label"><span>亮度</span><output id="brightnessVal">100%</output></div>
+          <input id="brightness" type="range" min="50" max="160" value="100" disabled />
+        </div>
+        <div>
+          <div class="label"><span>對比度</span><output id="contrastVal">100%</output></div>
+          <input id="contrast" type="range" min="50" max="160" value="100" disabled />
+        </div>
+        <div>
+          <div class="label"><span>飽和度</span><output id="saturationVal">100%</output></div>
+          <input id="saturation" type="range" min="0" max="180" value="100" disabled />
+        </div>
+        <div>
+          <div class="label"><span>銳化</span><output id="sharpenVal">0</output></div>
+          <input id="sharpen" type="range" min="0" max="3" step="1" value="0" disabled />
+        </div>
+        <div class="row">
+          <button id="autoBtn" class="primary" disabled>智慧自動提亮</button>
+          <button id="quickBrightBtn" disabled>快速提亮</button>
+        </div>
+        <div class="row">
+          <button id="compareHoldBtn" disabled>👁 按住看修改前</button>
+          <button id="resetFilterBtn" disabled>重設調整</button>
+        </div>
+        <div class="small">按住「修改前」會暫時顯示原始上傳照片；放開立即回到目前修改後的效果，不會改變任何設定。</div>
+        <div class="small" id="autoInfo">
+          智慧自動提亮會先分析照片的明暗分布，再決定提亮幅度；快速提亮則使用固定參數。
+        </div>
+      </div>
+
+      <div class="group">
+        <h2>智慧去污 / 修復</h2>
+        <select id="smartCleanMode" disabled>
+          <option value="face">臉部斑點／青春痘</option>
+          <option value="dust">照片灰塵／小型損傷</option>
+        </select>
+        <div>
+          <div class="label"><span>偵測強度</span><output id="smartCleanLevelVal">保守</output></div>
+          <input id="smartCleanLevel" type="range" min="1" max="3" step="1" value="1" disabled />
+        </div>
+        <div class="row">
+          <button id="smartAnalyzeBtn" disabled>分析污點</button>
+          <button id="smartApplyBtn" class="primary" disabled>套用智慧去污</button>
+        </div>
+        <button id="smartClearBtn" disabled>清除偵測標記</button>
+        <div class="small" id="smartCleanInfo">
+          「臉部斑點」使用 MediaPipe Face Landmarker 精確取得臉部輪廓、眼睛、眉毛、鼻子與嘴巴位置，再只分析安全皮膚區域。
+        </div>
+      </div>
+
+      <div class="group">
+        <h2>簡易去污</h2>
+        <button id="healBtn" disabled>去污筆：關閉</button>
+        <div>
+          <div class="label"><span>筆刷大小</span><output id="brushVal">24 px</output></div>
+          <input id="brush" type="range" min="8" max="80" value="24" disabled />
+        </div>
+        <div class="small">
+          開啟後，在照片的小污點、灰塵、斑點上點一下。此功能適合小範圍修補，不等同 AI 物件移除。
+        </div>
+      </div>
+
+      <div class="group">
+        <h2>復原</h2>
+        <div class="row">
+          <button id="undoBtn" disabled>↶ 復原</button>
+          <button id="redoBtn" disabled>↷ 重做</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <h2>匯出</h2>
+        <div>
+          <div class="label"><span>JPG 品質</span><output id="qualityVal">92%</output></div>
+          <input id="quality" type="range" min="60" max="100" value="92" />
+        </div>
+        <div class="row">
+          <button id="downloadJpgBtn" class="primary" disabled>下載 JPG</button>
+          <button id="downloadPngBtn" disabled>下載 PNG</button>
+        </div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>
