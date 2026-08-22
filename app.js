@@ -1109,6 +1109,9 @@
     mainLayout.classList.toggle('batch-mode',batch);
     app.classList.toggle('batch-active',batch);
     $('openBtn').textContent=batch ? '加入照片' : '上傳照片';
+    if(typeof activateRibbonTab==='function'){
+      activateRibbonTab(batch ? 'batch' : 'home');
+    }
     $('stageHint').textContent=batch
       ? '批次模式：上一張／下一張快速檢查；局部修圖會在切換時保存'
       : '可拖曳圖片到中央區域；放大僅影響檢視，不會改變照片尺寸';
@@ -3906,8 +3909,21 @@
   });
 
   // ============================================================
-  // V12.2 fixed workspace UI: right tabs + collapsible sidebars
+  // V12.3 Office-style Ribbon tabs + fixed workspace
   // ============================================================
+  function activateRibbonTab(name){
+    document.querySelectorAll('.ribbon-tab').forEach(btn=>{
+      btn.classList.toggle('active',btn.dataset.ribbonTab===name);
+    });
+    document.querySelectorAll('.ribbon-panel').forEach(panel=>{
+      panel.classList.toggle('active',panel.dataset.ribbonPanel===name);
+    });
+  }
+
+  document.querySelectorAll('.ribbon-tab').forEach(btn=>{
+    btn.addEventListener('click',()=>activateRibbonTab(btn.dataset.ribbonTab));
+  });
+
   document.querySelectorAll('.tool-tab').forEach(btn=>{
     btn.addEventListener('click',()=>{
       const name=btn.dataset.toolTab;
@@ -3925,11 +3941,8 @@
 
   function refreshWorkspaceAfterPanelToggle(){
     requestAnimationFrame(()=>{
-      if(source.width && zoomMode==='fit'){
-        fitZoomToStage();
-      }else if(source.width){
-        applyZoomCss();
-      }
+      if(source.width && zoomMode==='fit') fitZoomToStage();
+      else if(source.width) applyZoomCss();
     });
   }
 
@@ -3951,9 +3964,9 @@
     });
   }
 
-  // 單張模式預設只顯示照片資訊；批次模式切換時由 switchEditorMode 控制。
   if($('singleInfoPanel')) $('singleInfoPanel').hidden=false;
   app.classList.toggle('batch-active',editorMode==='batch');
+  activateRibbonTab(editorMode==='batch' ? 'batch' : 'home');
 
   renderBatchList();
   syncLabels();

@@ -4,87 +4,118 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <meta name="referrer" content="no-referrer" />
-<title>會員照片快速修圖工具 V12.2</title>
+<title>會員照片快速修圖工具 V12.3</title>
 <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
 <div class="app desktop-app" id="app">
 
-  <!-- Top title bar -->
   <header class="titlebar">
     <div class="brand-row">
-      <h1>會員照片快速修圖工具 V12.2</h1>
+      <h1>會員照片快速修圖工具 V12.3</h1>
+
+      <div class="mode-switch" aria-label="處理模式">
+        <button id="singleModeBtn" class="active" type="button">單張修圖</button>
+        <button id="batchModeBtn" type="button">批次處理</button>
+      </div>
+
       <div id="faceModelStatus" class="model-status loading" title="MediaPipe Face Landmarker 狀態">
         <span class="model-dot"></span>
         <span id="faceModelStatusText">正在連線 MediaPipe…</span>
       </div>
     </div>
 
-    <!-- Office-style ribbon -->
-    <div class="ribbon">
-      <div class="ribbon-section">
-        <div class="mode-switch" aria-label="處理模式">
-          <button id="singleModeBtn" class="active" type="button">單張修圖</button>
-          <button id="batchModeBtn" type="button">批次處理</button>
+    <div class="ribbon-tabbar" role="tablist" aria-label="功能 Ribbon">
+      <button class="ribbon-tab active" type="button" data-ribbon-tab="home">常用</button>
+      <button class="ribbon-tab" type="button" data-ribbon-tab="batch">批次</button>
+      <button class="ribbon-tab" type="button" data-ribbon-tab="view">檢視</button>
+    </div>
+
+    <div class="ribbon-content">
+      <section class="ribbon-panel active" data-ribbon-panel="home">
+        <div class="ribbon-group">
+          <div class="ribbon-group-title">檔案</div>
+          <div class="ribbon-commands">
+            <button id="openBtn" class="primary">上傳照片</button>
+            <input id="fileInput" type="file" accept="image/*" hidden />
+            <input id="batchFileInput" type="file" accept="image/*" multiple hidden />
+            <button id="resetAllBtn" disabled>還原原圖</button>
+          </div>
         </div>
-      </div>
 
-      <div class="ribbon-section">
-        <button id="openBtn" class="primary">上傳照片</button>
-        <input id="fileInput" type="file" accept="image/*" hidden />
-        <input id="batchFileInput" type="file" accept="image/*" multiple hidden />
-        <button id="resetAllBtn" disabled>還原原圖</button>
-      </div>
+        <div class="ribbon-group">
+          <div class="ribbon-group-title">照片</div>
+          <div class="ribbon-commands">
+            <button id="rotateLeftBtn" disabled>↶ 左轉</button>
+            <button id="rotateRightBtn" disabled>↷ 右轉</button>
+            <button id="autoHeadshotCropBtn" disabled>🎯 自動 2 吋</button>
+            <button id="cropBtn" disabled>✂ 裁切</button>
+            <button id="compareHoldBtn" disabled>👁 按住看修改前</button>
+          </div>
+        </div>
 
-      <div class="ribbon-section ribbon-photo">
-        <span class="ribbon-label">照片</span>
-        <button id="rotateLeftBtn" disabled title="左轉 90°">↶ 左轉</button>
-        <button id="rotateRightBtn" disabled title="右轉 90°">↷ 右轉</button>
-        <button id="autoHeadshotCropBtn" disabled>🎯 自動 2 吋</button>
-        <button id="cropBtn" disabled>✂ 裁切</button>
-        <button id="compareHoldBtn" disabled>👁 按住看修改前</button>
-      </div>
+        <div class="ribbon-group">
+          <div class="ribbon-group-title">復原</div>
+          <div class="ribbon-commands">
+            <button id="undoBtn" disabled>↶ 復原</button>
+            <button id="redoBtn" disabled>↷ 重做</button>
+          </div>
+        </div>
+      </section>
 
-      <div class="ribbon-section">
-        <span class="ribbon-label">復原</span>
-        <button id="undoBtn" disabled>↶ 復原</button>
-        <button id="redoBtn" disabled>↷ 重做</button>
-      </div>
+      <section class="ribbon-panel" data-ribbon-panel="batch">
+        <div class="ribbon-group">
+          <div class="ribbon-group-title">照片清單</div>
+          <div class="ribbon-commands">
+            <button id="batchAddBtn" class="primary">＋ 加入多張照片</button>
+            <button id="batchPrevBtn" disabled>← 上一張</button>
+            <button id="batchNextBtn" disabled>下一張 →</button>
+          </div>
+        </div>
 
-      <div class="ribbon-section zoom-control" aria-label="預覽縮放">
-        <span class="ribbon-label">檢視</span>
-        <button id="zoomOutBtn" type="button" title="縮小" disabled>−</button>
-        <input id="zoomRange" type="range" min="10" max="400" step="5" value="100" disabled />
-        <output id="zoomVal">100%</output>
-        <button id="zoomInBtn" type="button" title="放大" disabled>＋</button>
-        <button id="fitZoomBtn" type="button" disabled>適合視窗</button>
-      </div>
+        <div class="ribbon-group">
+          <div class="ribbon-group-title">全批處理</div>
+          <div class="ribbon-commands">
+            <button id="batchCropBtn" disabled>🎯 全批自動 2 吋</button>
+            <button id="batchAutoBtn" disabled>全批智慧提亮</button>
+            <button id="batchCleanBtn" disabled>全批臉部去污</button>
+          </div>
+        </div>
 
-      <div class="ribbon-section batch-ribbon batch-only" aria-label="批次操作">
-        <span class="ribbon-label">批次</span>
-        <button id="batchAddBtn" class="primary">＋ 加入多張</button>
-        <button id="batchPrevBtn" disabled>← 上一張</button>
-        <button id="batchNextBtn" disabled>下一張 →</button>
-        <button id="batchCropBtn" disabled>🎯 全批 2 吋</button>
-        <button id="batchAutoBtn" disabled>全批提亮</button>
-        <button id="batchCleanBtn" disabled>全批去污</button>
-        <button id="batchDoneBtn" disabled>✓ 完成</button>
-        <button id="batchZipBtn" disabled>下載 ZIP</button>
-        <button id="batchClearBtn" class="danger" disabled>清空</button>
-      </div>
+        <div class="ribbon-group">
+          <div class="ribbon-group-title">完成 / 匯出</div>
+          <div class="ribbon-commands">
+            <button id="batchDoneBtn" disabled>✓ 標記完成</button>
+            <button id="batchZipBtn" disabled>下載全部 ZIP</button>
+            <button id="batchClearBtn" class="danger" disabled>清空批次</button>
+          </div>
+        </div>
+      </section>
 
-      <div class="ribbon-section ribbon-view">
-        <span class="ribbon-label">版面</span>
-        <button id="toggleLeftBtn" type="button" title="顯示/隱藏左側欄">☰ 照片欄</button>
-        <button id="toggleRightBtn" type="button" title="顯示/隱藏右側工具">⚙ 工具欄</button>
-      </div>
+      <section class="ribbon-panel" data-ribbon-panel="view">
+        <div class="ribbon-group">
+          <div class="ribbon-group-title">照片縮放</div>
+          <div class="ribbon-commands zoom-ribbon">
+            <button id="zoomOutBtn" type="button" disabled>−</button>
+            <input id="zoomRange" type="range" min="10" max="400" step="5" value="100" disabled />
+            <output id="zoomVal">100%</output>
+            <button id="zoomInBtn" type="button" disabled>＋</button>
+            <button id="fitZoomBtn" type="button" disabled>適合視窗</button>
+          </div>
+        </div>
+
+        <div class="ribbon-group">
+          <div class="ribbon-group-title">工作區</div>
+          <div class="ribbon-commands">
+            <button id="toggleLeftBtn" type="button">☰ 照片欄</button>
+            <button id="toggleRightBtn" type="button">⚙ 工具欄</button>
+          </div>
+        </div>
+      </section>
     </div>
   </header>
 
-  <!-- Main fixed workspace -->
   <main class="workspace" id="mainLayout">
-
-    <!-- Left: only photo browser / information, independently scrollable -->
     <aside class="workspace-pane left-pane" id="leftPane">
       <div id="batchPanel" class="batch-panel" hidden>
         <div class="pane-heading">
@@ -96,42 +127,29 @@
             </div>
           </div>
         </div>
-
         <div id="batchProgress" class="batch-progress"></div>
         <div id="batchList" class="batch-list"></div>
-
-        <div class="side-note">
-          全批功能已移到上方 Ribbon。照片清單只在左側欄捲動，不會帶動中央照片工作區。
-        </div>
+        <div class="side-note">批次功能集中在上方「批次」Ribbon；左側只保留照片清單。</div>
       </div>
 
       <div id="singleInfoPanel" class="single-info-panel">
-        <div class="pane-heading">
-          <strong>照片資訊</strong>
-        </div>
+        <div class="pane-heading"><strong>照片資訊</strong></div>
         <div class="meta" id="meta">尚未載入照片</div>
-        <div class="side-note">
-          照片只在目前瀏覽器中處理，不會自動上傳到伺服器。
-        </div>
-        <div class="side-note">
-          需要更大的修圖畫面時，可按上方「☰ 照片欄」收合這一欄。
-        </div>
+        <div class="side-note">照片只在目前瀏覽器中處理，不會自動上傳到伺服器。</div>
+        <div class="side-note">細修時可到「檢視」Ribbon 收合左右欄。</div>
       </div>
     </aside>
 
-    <!-- Center: always visible -->
     <section class="workspace-pane stage-panel" id="dropZone">
       <div class="stage-top">
         <strong id="modeText">預覽</strong>
-        <span class="small" id="stageHint">可拖曳圖片到中央區域；中央照片區固定顯示</span>
+        <span class="small" id="stageHint">中央照片區固定顯示；左右工具不會帶動照片上下捲動</span>
       </div>
-
       <div class="stage" id="stageArea">
         <div id="empty" class="empty">
           <div style="font-size:44px">🖼️</div>
           點「上傳照片」或將照片拖曳到這裡
         </div>
-
         <div class="canvas-wrap" id="canvasWrap" hidden>
           <canvas id="preview"></canvas>
           <canvas id="overlay"></canvas>
@@ -139,7 +157,6 @@
       </div>
     </section>
 
-    <!-- Right: tabs + independently scrollable tools -->
     <aside class="workspace-pane right-pane" id="rightPane">
       <nav class="tool-tabs" aria-label="工具分類">
         <button class="tool-tab active" type="button" data-tool-tab="image">影像</button>
@@ -149,89 +166,55 @@
       </nav>
 
       <div class="tool-scroll">
-
-        <!-- IMAGE TAB -->
         <section class="tool-pane active" data-tool-pane="image">
           <h2>影像調整</h2>
-
           <div class="tool-card">
-            <div>
-              <div class="label"><span>亮度</span><output id="brightnessVal">100%</output></div>
-              <input id="brightness" type="range" min="50" max="160" value="100" disabled />
-            </div>
-
-            <div>
-              <div class="label"><span>對比度</span><output id="contrastVal">100%</output></div>
-              <input id="contrast" type="range" min="50" max="160" value="100" disabled />
-            </div>
-
-            <div>
-              <div class="label"><span>飽和度</span><output id="saturationVal">100%</output></div>
-              <input id="saturation" type="range" min="0" max="180" value="100" disabled />
-            </div>
-
-            <div>
-              <div class="label"><span>銳化</span><output id="sharpenVal">0</output></div>
-              <input id="sharpen" type="range" min="0" max="3" step="1" value="0" disabled />
-            </div>
+            <div><div class="label"><span>亮度</span><output id="brightnessVal">100%</output></div>
+              <input id="brightness" type="range" min="50" max="160" value="100" disabled /></div>
+            <div><div class="label"><span>對比度</span><output id="contrastVal">100%</output></div>
+              <input id="contrast" type="range" min="50" max="160" value="100" disabled /></div>
+            <div><div class="label"><span>飽和度</span><output id="saturationVal">100%</output></div>
+              <input id="saturation" type="range" min="0" max="180" value="100" disabled /></div>
+            <div><div class="label"><span>銳化</span><output id="sharpenVal">0</output></div>
+              <input id="sharpen" type="range" min="0" max="3" step="1" value="0" disabled /></div>
 
             <div class="row">
               <button id="autoBtn" class="primary" disabled>智慧自動提亮</button>
               <button id="quickBrightBtn" disabled>快速提亮</button>
             </div>
-
             <button id="resetFilterBtn" disabled>重設影像調整</button>
-
-            <div class="small" id="autoInfo">
-              智慧自動提亮會分析照片明暗分布，再決定提亮幅度；快速提亮則使用固定參數。
-            </div>
+            <div class="small" id="autoInfo">智慧自動提亮會分析照片明暗分布，再決定提亮幅度。</div>
           </div>
         </section>
 
-        <!-- CLEAN TAB -->
         <section class="tool-pane" data-tool-pane="clean">
           <h2>智慧去污 / 修復</h2>
-
           <div class="tool-card">
             <select id="smartCleanMode" disabled>
               <option value="face">臉部斑點／青春痘</option>
               <option value="dust">照片灰塵／小型損傷</option>
             </select>
-
-            <div>
-              <div class="label"><span>偵測強度</span><output id="smartCleanLevelVal">保守</output></div>
-              <input id="smartCleanLevel" type="range" min="1" max="3" step="1" value="1" disabled />
-            </div>
-
+            <div><div class="label"><span>偵測強度</span><output id="smartCleanLevelVal">保守</output></div>
+              <input id="smartCleanLevel" type="range" min="1" max="3" step="1" value="1" disabled /></div>
             <div class="row">
               <button id="smartAnalyzeBtn" disabled>分析污點</button>
               <button id="smartApplyBtn" class="primary" disabled>套用智慧去污</button>
             </div>
-
             <button id="smartClearBtn" disabled>清除偵測標記</button>
-
-            <div class="small" id="smartCleanInfo">
-              「臉部斑點」使用 MediaPipe Face Landmarker 精確取得五官與臉部輪廓，再只分析安全皮膚區域。
-            </div>
+            <div class="small" id="smartCleanInfo">MediaPipe 會依 Landmark 排除五官與臉部外輪廓。</div>
           </div>
 
           <h2>手動細修</h2>
           <div class="tool-card">
             <button id="healBtn" disabled>去污筆：關閉</button>
-            <div>
-              <div class="label"><span>筆刷大小</span><output id="brushVal">24 px</output></div>
-              <input id="brush" type="range" min="8" max="80" value="24" disabled />
-            </div>
-            <div class="small">
-              可搭配 200%～400% 放大，手動處理殘留的小污點、灰塵與斑點。
-            </div>
+            <div><div class="label"><span>筆刷大小</span><output id="brushVal">24 px</output></div>
+              <input id="brush" type="range" min="8" max="80" value="24" disabled /></div>
+            <div class="small">可搭配 200%～400% 放大處理殘留污點。</div>
           </div>
         </section>
 
-        <!-- CROP TAB -->
         <section class="tool-pane" data-tool-pane="crop">
           <h2>裁切</h2>
-
           <div class="tool-card">
             <select id="cropRatio" disabled>
               <option value="free">自由裁切</option>
@@ -242,22 +225,16 @@
               <option value="0.8">4 : 5　直式</option>
               <option value="1.7777777778">16 : 9　橫式</option>
             </select>
-
             <div class="row">
               <button id="applyCropBtn" class="primary" disabled>套用裁切</button>
               <button id="cancelCropBtn" disabled>取消裁切</button>
             </div>
-
-            <div class="mp-note">
-              「自動 2 吋」在上方 Ribbon。MediaPipe 會依 3.5 × 4.5 公分比例建立建議框，頭頂至下顎目標約佔高度 70%～80%。
-            </div>
+            <div class="mp-note">單張自動 2 吋在「常用」；全批自動 2 吋在「批次」。</div>
           </div>
         </section>
 
-        <!-- EXPORT TAB -->
         <section class="tool-pane" data-tool-pane="export">
           <h2>輸出尺寸</h2>
-
           <div class="tool-card">
             <select id="presetSize">
               <option value="original">原始尺寸</option>
@@ -266,43 +243,33 @@
               <option value="800x800">800 × 800</option>
               <option value="custom">自訂尺寸</option>
             </select>
-
             <div class="value-grid">
               <input id="outW" type="number" min="1" placeholder="寬度" disabled />
               <span>×</span>
               <input id="outH" type="number" min="1" placeholder="高度" disabled />
             </div>
-
             <label class="small"><input id="keepRatio" type="checkbox" checked /> 維持原圖比例</label>
           </div>
 
           <h2>下載</h2>
           <div class="tool-card">
-            <div>
-              <div class="label"><span>JPG 品質</span><output id="qualityVal">92%</output></div>
-              <input id="quality" type="range" min="60" max="100" value="92" />
-            </div>
-
+            <div><div class="label"><span>JPG 品質</span><output id="qualityVal">92%</output></div>
+              <input id="quality" type="range" min="60" max="100" value="92" /></div>
             <div class="row">
               <button id="downloadJpgBtn" class="primary" disabled>下載 JPG</button>
               <button id="downloadPngBtn" disabled>下載 PNG</button>
             </div>
-
-            <div class="small">
-              批次模式下載全部照片 ZIP 請使用上方 Ribbon 的「下載 ZIP」。
-            </div>
+            <div class="small">批次 ZIP 請切到上方「批次」Ribbon。</div>
           </div>
         </section>
-
       </div>
     </aside>
   </main>
 
-  <!-- Bottom status line -->
   <footer class="statusbar">
-    <span>中央照片區固定顯示</span>
-    <span>左側照片清單、右側工具各自捲動</span>
-    <span>Ctrl + 滑鼠滾輪可縮放照片</span>
+    <span>瀏覽器 100% 即可操作</span>
+    <span>Ribbon 分頁避免按鈕擠在同一排</span>
+    <span>中央照片固定顯示</span>
   </footer>
 </div>
 
