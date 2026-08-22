@@ -257,16 +257,28 @@ canvas{display:block;max-width:none;height:auto;user-select:none;touch-action:no
   min-width:45px;text-align:center;font-size:12px;font-weight:700;color:#334155;
 }
 
-/* Crop confirmation directly on the image workspace */
+/* V12.5: crop confirmation is a true overlay.
+   It is removed from the Stage flex flow, so showing it never moves the photo. */
 .crop-action-bar{
-  position:sticky;top:0;left:50%;z-index:30;
-  display:flex;align-items:center;gap:8px;
-  width:max-content;max-width:calc(100% - 24px);
-  margin:0 auto 10px;padding:7px 9px;
-  border:1px solid #93c5fd;border-radius:11px;
+  position:absolute;
+  top:12px;
+  left:50%;
+  transform:translateX(-50%);
+  z-index:30;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  width:max-content;
+  max-width:calc(100% - 24px);
+  margin:0;
+  padding:7px 9px;
+  border:1px solid #93c5fd;
+  border-radius:11px;
   background:rgba(255,255,255,.96);
   box-shadow:0 6px 18px rgba(15,23,42,.16);
-  color:#1e3a8a;font-size:12px;font-weight:700;
+  color:#1e3a8a;
+  font-size:12px;
+  font-weight:700;
   backdrop-filter:blur(5px);
 }
 .crop-action-bar[hidden]{display:none}
@@ -285,4 +297,8 @@ canvas{display:block;max-width:none;height:auto;user-select:none;touch-action:no
 @media (max-width:1150px){
   .stage-zoom input[type="range"]{width:80px}
   .stage-zoom #fitZoomBtn{display:none}
+}
+
+@media (max-width:1200px){
+  .crop-action-bar > span{display:none}
 }
