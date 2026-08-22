@@ -1,12 +1,12 @@
-import vision from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest";
-const { FaceLandmarker, FilesetResolver } = vision;
-
 (() => {
 
   // ============================================================
   // V12 MediaPipe Face Landmarker
   // ============================================================
-  const MP_WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm";
+  const MP_VERSION = "1.0.1";
+  const MP_MODULE_URL =
+    `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}`;
+  const MP_WASM_ROOT = `${MP_MODULE_URL}/wasm`;
   const MP_FACE_MODEL =
     "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 
@@ -25,6 +25,9 @@ const { FaceLandmarker, FilesetResolver } = vision;
   ];
   const MP_NOSE = [168,6,197,195,5,4,1,19,94,2,98,97,326,327,294,278,344,440];
 
+  let FaceLandmarker = null;
+  let FilesetResolver = null;
+  let mpModulePromise = null;
   let mpFaceLandmarker = null;
   let mpFacePromise = null;
   let mpFaceReady = false;
@@ -40,21 +43,85 @@ const { FaceLandmarker, FilesetResolver } = vision;
     if(label) label.textContent=text;
   }
 
-  async function createMediaPipeFaceLandmarker(delegate){
-    const fileset = await FilesetResolver.forVisionTasks(MP_WASM_ROOT);
-    return await FaceLandmarker.createFromOptions(fileset,{
-      baseOptions:{
-        modelAssetPath:MP_FACE_MODEL,
-        ...(delegate ? {delegate} : {})
-      },
-      runningMode:"IMAGE",
-      numFaces:3,
-      minFaceDetectionConfidence:.55,
-      minFacePresenceConfidence:.55,
-      minTrackingConfidence:.5,
-      outputFaceBlendshapes:false,
-      outputFacialTransformationMatrixes:false
+  function withTimeout(promise,ms,label){
+    let timer;
+    const timeout=new Promise((_,reject)=>{
+      timer=setTimeout(
+        ()=>reject(new Error(`${label}逾時（${Math.round(ms/1000)} 秒）`)),
+        ms
+      );
     });
+    return Promise.race([promise,timeout]).finally(()=>clearTimeout(timer));
+  }
+
+  async function loadMediaPipeModule(){
+    if(FaceLandmarker && FilesetResolver){
+      return {FaceLandmarker,FilesetResolver};
+    }
+
+    if(!mpModulePromise){
+      mpModulePromise=(async()=>{
+        setFaceModelStatus("loading",`載入 MediaPipe ${MP_VERSION}…`);
+
+        // 使用 dynamic import，讓 CDN import 錯誤能被 try/catch 捕捉，
+        // 而不是讓整個 app.js 在模組解析階段直接停止。
+        const mod=await withTimeout(
+          import(MP_MODULE_URL),
+          20000,
+          "MediaPipe JavaScript"
+        );
+
+        const vision=mod.default || mod;
+        FaceLandmarker=mod.FaceLandmarker || vision.FaceLandmarker;
+        FilesetResolver=mod.FilesetResolver || vision.FilesetResolver;
+
+        if(!FaceLandmarker || !FilesetResolver){
+          throw new Error(
+            "MediaPipe 模組已下載，但找不到 FaceLandmarker / FilesetResolver"
+          );
+        }
+
+        return {FaceLandmarker,FilesetResolver};
+      })().catch(err=>{
+        mpModulePromise=null;
+        throw err;
+      });
+    }
+
+    return mpModulePromise;
+  }
+
+  async function createMediaPipeFaceLandmarker(delegate){
+    await loadMediaPipeModule();
+
+    setFaceModelStatus(
+      "loading",
+      delegate==="GPU" ? "載入 WASM / 模型（GPU）…" : "載入 WASM / 模型（CPU）…"
+    );
+
+    const fileset = await withTimeout(
+      FilesetResolver.forVisionTasks(MP_WASM_ROOT),
+      20000,
+      "MediaPipe WASM"
+    );
+
+    return await withTimeout(
+      FaceLandmarker.createFromOptions(fileset,{
+        baseOptions:{
+          modelAssetPath:MP_FACE_MODEL,
+          ...(delegate ? {delegate} : {})
+        },
+        runningMode:"IMAGE",
+        numFaces:3,
+        minFaceDetectionConfidence:.55,
+        minFacePresenceConfidence:.55,
+        minTrackingConfidence:.5,
+        outputFaceBlendshapes:false,
+        outputFacialTransformationMatrixes:false
+      }),
+      30000,
+      "Face Landmarker 模型"
+    );
   }
 
   async function initMediaPipeFaceLandmarker(){
@@ -62,23 +129,30 @@ const { FaceLandmarker, FilesetResolver } = vision;
     if(mpFacePromise) return mpFacePromise;
 
     mpFacePromise=(async()=>{
-      setFaceModelStatus("loading","MediaPipe 載入中…");
+      setFaceModelStatus("loading","正在連線 MediaPipe…");
       try{
+        await loadMediaPipeModule();
+
         try{
           mpFaceLandmarker=await createMediaPipeFaceLandmarker("GPU");
         }catch(gpuError){
           console.warn("MediaPipe GPU 初始化失敗，改用 CPU/WASM。",gpuError);
           mpFaceLandmarker=await createMediaPipeFaceLandmarker(null);
         }
+
         mpFaceReady=true;
         mpFaceFailed=false;
-        setFaceModelStatus("ready","MediaPipe 已就緒");
+        setFaceModelStatus("ready",`MediaPipe ${MP_VERSION} 已就緒`);
         return mpFaceLandmarker;
       }catch(err){
         console.error("MediaPipe Face Landmarker 初始化失敗",err);
         mpFaceReady=false;
         mpFaceFailed=true;
-        setFaceModelStatus("error","MediaPipe 載入失敗");
+        mpFacePromise=null;
+        setFaceModelStatus(
+          "error",
+          `MediaPipe 載入失敗：${err?.message || "未知錯誤"}`
+        );
         throw err;
       }
     })();
@@ -3832,8 +3906,21 @@ const { FaceLandmarker, FilesetResolver } = vision;
   renderBatchList();
   syncLabels();
 
-  // 頁面載入後預先初始化；即使失敗，手動修圖功能仍可使用。
-  initMediaPipeFaceLandmarker().catch(()=>{
-    setFaceModelStatus("error","MediaPipe 載入失敗");
-  });
+  const modelStatusBox=document.getElementById("faceModelStatus");
+  if(modelStatusBox){
+    modelStatusBox.style.cursor="pointer";
+    modelStatusBox.title="點一下可重新載入 MediaPipe 模型";
+    modelStatusBox.addEventListener("click",async()=>{
+      if(mpFaceReady) return;
+      mpFacePromise=null;
+      mpModulePromise=null;
+      try{
+        await initMediaPipeFaceLandmarker();
+      }catch{}
+    });
+  }
+
+  // 頁面載入後預先初始化；失敗時會直接顯示錯誤，
+  // 不會再永久停留在「載入中」。
+  initMediaPipeFaceLandmarker().catch(()=>{});
 })();

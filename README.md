@@ -1,4 +1,4 @@
-# 會員照片快速修圖工具 V12（GitHub Pages / MediaPipe）
+# 會員照片快速修圖工具 V12.1（GitHub Pages / MediaPipe）
 
 ## 部署方式
 
@@ -46,3 +46,20 @@ MediaPipe 用於：
 
 `file://` 直接雙擊開啟時，瀏覽器對 ES Module / CDN 的安全限制可能不同。
 正式使用建議放在 GitHub Pages、localhost 或其他 HTTPS 靜態網站環境。
+
+
+## V12.1 修正
+
+V12 原版使用靜態 default import 載入 MediaPipe CDN。在某些瀏覽器 / jsDelivr
+套件入口組合下，JavaScript 可能在 app.js 模組解析階段直接中止，畫面因此永久顯示
+「MediaPipe 載入中…」。
+
+V12.1 改為：
+- dynamic import
+- 固定 `@mediapipe/tasks-vision@1.0.1`
+- WASM 與 JS 使用相同版本
+- JavaScript / WASM / 模型都有載入逾時處理
+- 失敗時右上角會顯示實際錯誤，而不是無限「載入中」
+- 載入失敗時可直接點右上角狀態重新嘗試
+
+部署 GitHub Pages 後，建議按 Ctrl+F5 強制重新整理，避免瀏覽器沿用舊的 app.js 快取。
