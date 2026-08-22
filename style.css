@@ -186,7 +186,7 @@ canvas{display:block;max-width:none;height:auto;user-select:none;touch-action:no
 
 .right-pane{display:flex;flex-direction:column;min-width:0}
 .tool-tabs{
-  flex:0 0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:3px;
+  flex:0 0 auto;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:3px;
   padding:7px;border-bottom:1px solid var(--line);background:#f8fafc;
 }
 .tool-tab{min-height:34px;padding:4px 5px;border:1px solid transparent;background:transparent;font-size:12px}
@@ -242,4 +242,47 @@ canvas{display:block;max-width:none;height:auto;user-select:none;touch-action:no
   .brand-row{flex-wrap:wrap}
   .brand-row h1{width:100%;font-size:18px}
   .ribbon-content{height:64px}
+}
+
+/* V12.4: photo zoom always visible */
+.stage-top{min-height:44px}
+.stage-zoom{
+  display:flex;align-items:center;gap:5px;flex:0 0 auto;margin-left:auto;
+}
+.stage-zoom button{
+  width:auto;min-width:34px;min-height:32px;padding:4px 8px;
+}
+.stage-zoom input[type="range"]{width:105px}
+.stage-zoom output{
+  min-width:45px;text-align:center;font-size:12px;font-weight:700;color:#334155;
+}
+
+/* Crop confirmation directly on the image workspace */
+.crop-action-bar{
+  position:sticky;top:0;left:50%;z-index:30;
+  display:flex;align-items:center;gap:8px;
+  width:max-content;max-width:calc(100% - 24px);
+  margin:0 auto 10px;padding:7px 9px;
+  border:1px solid #93c5fd;border-radius:11px;
+  background:rgba(255,255,255,.96);
+  box-shadow:0 6px 18px rgba(15,23,42,.16);
+  color:#1e3a8a;font-size:12px;font-weight:700;
+  backdrop-filter:blur(5px);
+}
+.crop-action-bar[hidden]{display:none}
+.crop-action-bar button{
+  width:auto;min-height:34px;padding:5px 10px;
+}
+
+.tool-tabs{grid-template-columns:repeat(5,minmax(0,1fr))}
+.tool-tab{padding-left:2px;padding-right:2px}
+
+@media (max-width:1450px){
+  .stage-top{flex-wrap:wrap;row-gap:5px}
+  .stage-top .small{flex:1 1 300px}
+  .stage-zoom{margin-left:auto}
+}
+@media (max-width:1150px){
+  .stage-zoom input[type="range"]{width:80px}
+  .stage-zoom #fitZoomBtn{display:none}
 }

@@ -26,12 +26,18 @@
   const MP_NOSE = [168,6,197,195,5,4,1,19,94,2,98,97,326,327,294,278,344,440];
 
   let FaceLandmarker = null;
+  let ImageSegmenter = null;
   let FilesetResolver = null;
   let mpModulePromise = null;
   let mpFaceLandmarker = null;
   let mpFacePromise = null;
   let mpFaceReady = false;
   let mpFaceFailed = false;
+
+  const MP_SEGMENT_MODEL =
+    "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite";
+  let mpImageSegmenter = null;
+  let mpSegmenterPromise = null;
 
   function setFaceModelStatus(kind,text){
     const box=document.getElementById("faceModelStatus");
@@ -55,8 +61,8 @@
   }
 
   async function loadMediaPipeModule(){
-    if(FaceLandmarker && FilesetResolver){
-      return {FaceLandmarker,FilesetResolver};
+    if(FaceLandmarker && FilesetResolver && ImageSegmenter){
+      return {FaceLandmarker,FilesetResolver,ImageSegmenter};
     }
 
     if(!mpModulePromise){
@@ -73,6 +79,7 @@
 
         const vision=mod.default || mod;
         FaceLandmarker=mod.FaceLandmarker || vision.FaceLandmarker;
+        ImageSegmenter=mod.ImageSegmenter || vision.ImageSegmenter;
         FilesetResolver=mod.FilesetResolver || vision.FilesetResolver;
 
         if(!FaceLandmarker || !FilesetResolver){
@@ -81,7 +88,7 @@
           );
         }
 
-        return {FaceLandmarker,FilesetResolver};
+        return {FaceLandmarker,FilesetResolver,ImageSegmenter};
       })().catch(err=>{
         mpModulePromise=null;
         throw err;
@@ -158,6 +165,179 @@
     })();
 
     return mpFacePromise;
+  }
+
+  async function createMediaPipeImageSegmenter(delegate){
+    await loadMediaPipeModule();
+    if(!ImageSegmenter) throw new Error("目前 MediaPipe 模組沒有提供 ImageSegmenter");
+
+    const fileset=await withTimeout(
+      FilesetResolver.forVisionTasks(MP_WASM_ROOT),
+      20000,
+      "MediaPipe ImageSegmenter WASM"
+    );
+
+    return await withTimeout(
+      ImageSegmenter.createFromOptions(fileset,{
+        baseOptions:{
+          modelAssetPath:MP_SEGMENT_MODEL,
+          ...(delegate ? {delegate} : {})
+        },
+        runningMode:"IMAGE",
+        outputCategoryMask:true,
+        outputConfidenceMasks:false
+      }),
+      30000,
+      "人物去背模型"
+    );
+  }
+
+  async function initMediaPipeImageSegmenter(){
+    if(mpImageSegmenter) return mpImageSegmenter;
+    if(mpSegmenterPromise) return mpSegmenterPromise;
+
+    mpSegmenterPromise=(async()=>{
+      await loadMediaPipeModule();
+      try{
+        try{
+          mpImageSegmenter=await createMediaPipeImageSegmenter("GPU");
+        }catch(gpuError){
+          console.warn("ImageSegmenter GPU 初始化失敗，改用 CPU/WASM。",gpuError);
+          mpImageSegmenter=await createMediaPipeImageSegmenter(null);
+        }
+        return mpImageSegmenter;
+      }catch(err){
+        mpSegmenterPromise=null;
+        throw err;
+      }
+    })();
+
+    return mpSegmenterPromise;
+  }
+
+  async function runImageSegmentation(inputCanvas){
+    const segmenter=await initMediaPipeImageSegmenter();
+
+    const task=new Promise((resolve,reject)=>{
+      let settled=false;
+      const done=result=>{
+        if(settled || !result) return;
+        settled=true;
+        resolve(result);
+      };
+
+      try{
+        const result=segmenter.segment(inputCanvas,done);
+        if(result && typeof result.then==="function"){
+          result.then(done).catch(reject);
+        }else if(result && (result.categoryMask || result.confidenceMasks)){
+          done(result);
+        }
+      }catch(err){
+        reject(err);
+      }
+    });
+
+    return await withTimeout(task,30000,"人物去背分析");
+  }
+
+  function buildForegroundMaskCanvas(segmentResult,targetW,targetH,featherPx=1.5){
+    const categoryMask=segmentResult?.categoryMask;
+    if(!categoryMask) throw new Error("去背模型沒有回傳 categoryMask");
+
+    const mw=categoryMask.width;
+    const mh=categoryMask.height;
+    const categories=categoryMask.getAsUint8Array();
+
+    const small=document.createElement("canvas");
+    small.width=mw;
+    small.height=mh;
+    const sctx2=small.getContext("2d",{willReadFrequently:true});
+    const maskImage=sctx2.createImageData(mw,mh);
+
+    for(let i=0;i<categories.length;i++){
+      const foreground=categories[i]===0 ? 0 : 255;
+      const p=i*4;
+      maskImage.data[p]=255;
+      maskImage.data[p+1]=255;
+      maskImage.data[p+2]=255;
+      maskImage.data[p+3]=foreground;
+    }
+    sctx2.putImageData(maskImage,0,0);
+
+    const full=document.createElement("canvas");
+    full.width=targetW;
+    full.height=targetH;
+    const fctx=full.getContext("2d");
+    fctx.clearRect(0,0,targetW,targetH);
+    fctx.imageSmoothingEnabled=true;
+    fctx.imageSmoothingQuality="high";
+    if(featherPx>0) fctx.filter=`blur(${featherPx}px)`;
+    fctx.drawImage(small,0,0,targetW,targetH);
+    fctx.filter="none";
+
+    if(typeof categoryMask.close==="function"){
+      try{categoryMask.close();}catch{}
+    }
+    return full;
+  }
+
+  async function removePersonBackground(outputMode="white",featherPx=1.5){
+    if(!source.width || !source.height) return;
+
+    $("removeBgBtn").disabled=true;
+    $("bgRemoveInfo").textContent="正在載入人物分割模型並分析背景…";
+
+    try{
+      const result=await runImageSegmentation(source);
+      const mask=buildForegroundMaskCanvas(
+        result,source.width,source.height,featherPx
+      );
+
+      const out=document.createElement("canvas");
+      out.width=source.width;
+      out.height=source.height;
+      const ctx=out.getContext("2d");
+
+      ctx.clearRect(0,0,out.width,out.height);
+      ctx.drawImage(source,0,0);
+      ctx.globalCompositeOperation="destination-in";
+      ctx.drawImage(mask,0,0);
+      ctx.globalCompositeOperation="source-over";
+
+      if(outputMode==="white"){
+        ctx.globalCompositeOperation="destination-over";
+        ctx.fillStyle="#ffffff";
+        ctx.fillRect(0,0,out.width,out.height);
+        ctx.globalCompositeOperation="source-over";
+      }
+
+      source.width=out.width;
+      source.height=out.height;
+      sctx.clearRect(0,0,source.width,source.height);
+      sctx.drawImage(out,0,0);
+
+      sourceHasTransparency=(outputMode==="transparent");
+      sourceDirty=true;
+      smartSpots=[];
+      smartFaceRegion=null;
+      $("smartApplyBtn").disabled=true;
+      pushHistory();
+      touchCurrentBatchItem();
+      updateMeta();
+      await renderPreview();
+
+      $("bgRemoveInfo").textContent=outputMode==="transparent"
+        ? "去背完成：背景目前為透明。請使用 PNG 下載；JPG 會自動轉為白色背景。"
+        : "去背完成：背景已填成白色，可使用 JPG 或 PNG 下載。";
+    }catch(err){
+      console.error("人物去背失敗",err);
+      $("bgRemoveInfo").textContent=
+        "人物去背失敗：" + (err?.message || "未知錯誤") +
+        "。其他修圖功能不受影響，可稍後重試。";
+    }finally{
+      $("removeBgBtn").disabled=!source.width;
+    }
   }
 
   function mpLandmarkPixels(landmarks,canvas){
@@ -806,11 +986,12 @@
   let compareOriginalImage = null;
   let compareHolding = false;
   let compareSavedModeText = '';
+  let sourceHasTransparency = false;
 
   const controls = [
     'rotateLeftBtn','rotateRightBtn','autoHeadshotCropBtn','cropBtn','cropRatio','brightness','contrast','saturation','sharpen',
     'autoBtn','quickBrightBtn','compareHoldBtn','resetFilterBtn','smartAnalyzeBtn','smartCleanMode','smartCleanLevel','smartClearBtn',
-    'healBtn','brush','downloadJpgBtn','downloadPngBtn','resetAllBtn',
+    'healBtn','brush','bgOutputMode','bgFeather','removeBgBtn','downloadJpgBtn','downloadPngBtn','resetAllBtn',
     'zoomOutBtn','zoomInBtn','zoomRange','fitZoomBtn'
   ];
 
@@ -939,8 +1120,12 @@
     item.autoInfo=$('autoInfo').textContent;
 
     if(sourceDirty){
-      const blob=await canvasToBlob(source,'image/jpeg',.97);
-      if(blob) item.editedBlob=blob;
+      const type=sourceHasTransparency ? 'image/png' : 'image/jpeg';
+      const blob=await canvasToBlob(source,type,.97);
+      if(blob){
+        item.editedBlob=blob;
+        item.hasTransparency=sourceHasTransparency;
+      }
       sourceDirty=false;
     }
   }
@@ -995,13 +1180,14 @@
     });
   }
 
-  async function loadBlobIntoEditor(blob, name, filterState, autoInfoText, compareBlob=null){
+  async function loadBlobIntoEditor(blob, name, filterState, autoInfoText, compareBlob=null, hasTransparency=false){
     loadingBatchItem=true;
     try{
       const img=await blobToImage(blob);
       originalImage=img;
       originalName=name.replace(/\.[^.]+$/,'') || 'photo';
       compareHolding=false;
+      sourceHasTransparency=!!hasTransparency;
       compareOriginalImage = compareBlob ? await blobToImage(compareBlob) : img;
 
       source.width=img.naturalWidth;
@@ -1064,7 +1250,8 @@
       item.file.name,
       item.filters || defaultBatchFilters(),
       item.autoInfo,
-      item.file
+      item.file,
+      !!item.hasTransparency
     );
 
     $('modeText').textContent=`批次處理：第 ${index+1} / ${batchItems.length} 張`;
@@ -1088,6 +1275,7 @@
     $('modeText').textContent=editorMode==='batch' ? '批次處理' : '預覽';
     setEnabled(false);
     sourceDirty=false;
+    sourceHasTransparency=false;
     compareOriginalImage=null;
     compareHolding=false;
   }
@@ -1144,7 +1332,8 @@
         autoInfo:'',
         adjusted:false,
         done:false,
-        autoCropped:false
+        autoCropped:false,
+        hasTransparency:false
       });
     }
 
@@ -2416,44 +2605,104 @@
     const h=Math.max(1,Math.round(inputCanvas.height*scale));
 
     const work=document.createElement('canvas');
-    work.width=w; work.height=h;
+    work.width=w;
+    work.height=h;
     const ctx=work.getContext('2d',{willReadFrequently:true});
     ctx.drawImage(inputCanvas,0,0,w,h);
 
-    const img=ctx.getImageData(0,0,w,h);
-    const data=img.data;
+    const image=ctx.getImageData(0,0,w,h);
+    const data=image.data;
     const lum=new Float32Array(w*h);
+    const lumSq=new Float32Array(w*h);
+
     for(let p=0;p<w*h;p++){
       const i=p*4;
-      lum[p]=data[i]*.2126+data[i+1]*.7152+data[i+2]*.0722;
+      const l=data[i]*.2126+data[i+1]*.7152+data[i+2]*.0722;
+      lum[p]=l;
+      lumSq[p]=l*l;
     }
+
     const intL=buildIntegralFloat(lum,w,h);
+    const intL2=buildIntegralFloat(lumSq,w,h);
 
     const sensitivity=Math.max(1,Math.min(3,level|0));
-    const threshold=[0,52,43,36][sensitivity];
-    const maxArea=[0,34,58,84][sensitivity];
-    const maxDim=[0,13,18,23][sensitivity];
-    const radius=5;
+    const diffThreshold=[0,48,40,34][sensitivity];
+    const maxRingStd=[0,17,21,25][sensitivity];
+    const edgeThreshold=[0,25,31,38][sensitivity];
+    const maxArea=[0,24,42,65][sensitivity];
+    const maxDim=[0,10,15,20][sensitivity];
+
+    const outerR=5;
+    const innerR=1;
     const mask=new Uint8Array(w*h);
     const scoreMap=new Uint8Array(w*h);
 
-    for(let y=radius+1;y<h-radius-1;y++){
-      for(let x=radius+1;x<w-radius-1;x++){
+    function rectMean(integral,x1,y1,x2,y2){
+      const area=Math.max(1,(x2-x1)*(y2-y1));
+      return integralRectSum(integral,w,x1,y1,x2,y2)/area;
+    }
+
+    for(let y=outerR+1;y<h-outerR-1;y++){
+      for(let x=outerR+1;x<w-outerR-1;x++){
         const pos=y*w+x;
         const i=pos*4;
         if(data[i+3]<32) continue;
 
-        const x1=x-radius,y1=y-radius,x2=x+radius+1,y2=y+radius+1;
-        const area=(x2-x1)*(y2-y1);
-        const mean=integralRectSum(intL,w,x1,y1,x2,y2)/area;
-        const diff=Math.abs(lum[pos]-mean);
+        const ox1=x-outerR,oy1=y-outerR;
+        const ox2=x+outerR+1,oy2=y+outerR+1;
+        const ix1=x-innerR,iy1=y-innerR;
+        const ix2=x+innerR+1,iy2=y+innerR+1;
 
-        // 只抓非常局部且明顯的黑 / 白點，避免一般物體邊界。
-        const extreme=lum[pos]<52 || lum[pos]>224;
-        if(!extreme || diff<threshold) continue;
+        const outerArea=(ox2-ox1)*(oy2-oy1);
+        const innerArea=(ix2-ix1)*(iy2-iy1);
+        const ringArea=outerArea-innerArea;
 
+        const outerSum=integralRectSum(intL,w,ox1,oy1,ox2,oy2);
+        const innerSum=integralRectSum(intL,w,ix1,iy1,ix2,iy2);
+        const ringSum=outerSum-innerSum;
+        const ringMean=ringSum/Math.max(1,ringArea);
+
+        const outerSq=integralRectSum(intL2,w,ox1,oy1,ox2,oy2);
+        const innerSq=integralRectSum(intL2,w,ix1,iy1,ix2,iy2);
+        const ringSq=outerSq-innerSq;
+        const ringVariance=Math.max(
+          0,
+          ringSq/Math.max(1,ringArea)-ringMean*ringMean
+        );
+        const ringStd=Math.sqrt(ringVariance);
+
+        // 周圍本身很複雜，通常是頭髮/背景、衣服/背景或五官邊緣。
+        if(ringStd>maxRingStd) continue;
+
+        const innerMean=innerSum/innerArea;
+        const diff=Math.abs(innerMean-ringMean);
+        if(diff<diffThreshold) continue;
+
+        const leftMean=rectMean(intL,ox1,oy1,x-innerR,oy2);
+        const rightMean=rectMean(intL,x+innerR+1,oy1,ox2,oy2);
+        const topMean=rectMean(intL,ox1,oy1,ox2,y-innerR);
+        const bottomMean=rectMean(intL,ox1,y+innerR+1,ox2,oy2);
+
+        // 左右或上下兩側有明顯不同，即視為物體交界而跳過。
+        if(
+          Math.abs(leftMean-rightMean)>edgeThreshold ||
+          Math.abs(topMean-bottomMean)>edgeThreshold
+        ) continue;
+
+        const sign=innerMean>=ringMean ? 1 : -1;
+        let consistent=0,total=0;
+        for(let yy=y-1;yy<=y+1;yy++){
+          for(let xx=x-1;xx<=x+1;xx++){
+            const d=(lum[yy*w+xx]-ringMean)*sign;
+            if(d>diffThreshold*.40) consistent++;
+            total++;
+          }
+        }
+        if(consistent<Math.ceil(total*.45)) continue;
+
+        const score=diff-ringStd*.75;
         mask[pos]=1;
-        scoreMap[pos]=Math.min(255,Math.round(diff));
+        scoreMap[pos]=Math.max(0,Math.min(255,Math.round(score)));
       }
     }
 
@@ -2475,33 +2724,36 @@
           const pos=stack.pop();
           const py=Math.floor(pos/w);
           const px=pos-py*w;
-          area++; sumX+=px; sumY+=py; sumScore+=scoreMap[pos];
-          minX=Math.min(minX,px); maxX=Math.max(maxX,px);
-          minY=Math.min(minY,py); maxY=Math.max(maxY,py);
+          area++;sumX+=px;sumY+=py;sumScore+=scoreMap[pos];
+          minX=Math.min(minX,px);maxX=Math.max(maxX,px);
+          minY=Math.min(minY,py);maxY=Math.max(maxY,py);
 
           for(const [dx,dy] of dirs){
-            const nx=px+dx, ny=py+dy;
-            if(nx<=0 || nx>=w-1 || ny<=0 || ny>=h-1) continue;
+            const nx=px+dx,ny=py+dy;
+            if(nx<=0||nx>=w-1||ny<=0||ny>=h-1) continue;
             const np=ny*w+nx;
-            if(mask[np] && !visited[np]){
+            if(mask[np]&&!visited[np]){
               visited[np]=1;
               stack.push(np);
             }
           }
         }
 
-        const bw=maxX-minX+1,bh=maxY-minY+1;
+        const bw=maxX-minX+1;
+        const bh=maxY-minY+1;
         const longSide=Math.max(bw,bh);
         const shortSide=Math.max(1,Math.min(bw,bh));
         const aspect=longSide/shortSide;
+        const compactness=area/Math.max(1,bw*bh);
 
-        if(area<1 || area>maxArea || longSide>maxDim) continue;
-        if(aspect>4.2) continue;
+        if(area<1 || area>maxArea) continue;
+        if(longSide>maxDim || aspect>2.6) continue;
+        if(area>=4 && compactness<.28) continue;
 
         comps.push({
           x:sumX/area,
           y:sumY/area,
-          radius:Math.max(2.4,longSide*.72),
+          radius:Math.max(2.4,longSide*.75),
           score:sumScore/area,
           area
         });
@@ -2510,9 +2762,12 @@
 
     comps.sort((a,b)=>b.score-a.score);
     const selected=[];
-    const maxSpots=[0,55,90,130][sensitivity];
+    const maxSpots=[0,40,70,100][sensitivity];
+
     for(const c of comps){
-      if(selected.some(s=>Math.hypot(c.x-s.x,c.y-s.y)<Math.max(c.radius,s.radius)*1.15)) continue;
+      if(selected.some(s=>
+        Math.hypot(c.x-s.x,c.y-s.y)<Math.max(c.radius,s.radius)*1.2
+      )) continue;
       selected.push(c);
       if(selected.length>=maxSpots) break;
     }
@@ -2633,7 +2888,13 @@
     }
   }
 
+  function syncCropActionBar(){
+    const bar=$('cropActionBar');
+    if(bar) bar.hidden=!cropMode;
+  }
+
   function drawOverlay(){
+    syncCropActionBar();
     octx.clearRect(0,0,overlay.width,overlay.height);
 
     if(smartFaceRegion && smartAnalysisMode==='face' && !cropMode){
@@ -2866,6 +3127,7 @@
     preview.style.cursor='move';
     cropRect = sourceRectToPreviewRect(sourceRect);
     $('modeText').textContent=modeText;
+    if(typeof activateToolTab==='function') activateToolTab('crop');
     drawOverlay();
   }
 
@@ -3150,6 +3412,7 @@
       originalImage=img;
       compareOriginalImage=img;
       compareHolding=false;
+      sourceHasTransparency=false;
       source.width=img.naturalWidth;
       source.height=img.naturalHeight;
       sctx.clearRect(0,0,source.width,source.height);
@@ -3168,6 +3431,11 @@
       resetFilterValues();
       resetAutoInfo();
       resetSmartCleanInfo();
+      if($('bgOutputMode')) $('bgOutputMode').value='white';
+      if($('bgFeather')) $('bgFeather').value='1.5';
+      if($('bgFeatherVal')) $('bgFeatherVal').textContent='1.5 px';
+      if($('bgRemoveInfo')) $('bgRemoveInfo').textContent=
+        '使用 MediaPipe 人物分割模型保留頭髮、臉部、身體與衣服。透明背景請使用 PNG 下載。';
       pushHistory();
       sourceDirty=false;
       canvasWrap.hidden=false;
@@ -3330,7 +3598,7 @@
     renderPreview();
   }
 
-  async function exportCanvas(){
+  async function exportCanvas(type='image/png'){
     const f=filters();
 
     let outW=source.width, outH=source.height;
@@ -3343,6 +3611,12 @@
     const base=document.createElement('canvas');
     base.width=outW; base.height=outH;
     const b=base.getContext('2d',{willReadFrequently:true});
+
+    if(type==='image/jpeg' && sourceHasTransparency){
+      b.fillStyle='#ffffff';
+      b.fillRect(0,0,outW,outH);
+    }
+
     b.filter=`brightness(${f.brightness}%) contrast(${f.contrast}%) saturate(${f.saturation}%)`;
 
     if($('keepRatio').checked && preset!=='original'){
@@ -3351,8 +3625,10 @@
       const dh=Math.round(source.height*scale);
       const dx=Math.round((outW-dw)/2);
       const dy=Math.round((outH-dh)/2);
-      b.fillStyle='#ffffff';
-      b.fillRect(0,0,outW,outH);
+      if(!sourceHasTransparency || type==='image/jpeg'){
+        b.fillStyle='#ffffff';
+        b.fillRect(0,0,outW,outH);
+      }
       b.drawImage(source,dx,dy,dw,dh);
     }else{
       b.drawImage(source,0,0,outW,outH);
@@ -3368,7 +3644,7 @@
   }
 
   async function download(type){
-    const c=await exportCanvas();
+    const c=await exportCanvas(type);
     const ext=type==='image/png'?'png':'jpg';
     const quality=+$('quality').value/100;
     c.toBlob(blob=>{
@@ -3476,6 +3752,7 @@
     cropMode=!cropMode;
 
     if(cropMode){
+      if(typeof activateToolTab==='function') activateToolTab('crop');
       initCropRect();
       cropDragMode=null;
       cropStartRect=null;
@@ -3652,6 +3929,18 @@
     }
   });
 
+  $('bgFeather').addEventListener('input',()=>{
+    $('bgFeatherVal').textContent=`${$('bgFeather').value} px`;
+  });
+
+  $('removeBgBtn').onclick=async()=>{
+    if(!source.width) return;
+    await removePersonBackground(
+      $('bgOutputMode').value,
+      +$('bgFeather').value
+    );
+  };
+
   $('smartCleanMode').addEventListener('change',()=>{
     smartSpots=[];
     smartFaceRegion=null;
@@ -3659,7 +3948,7 @@
     $('smartApplyBtn').disabled=true;
     $('smartCleanInfo').textContent=smartAnalysisMode==='face'
       ? '已切換為「臉部斑點／青春痘」：MediaPipe 會先取得 Face Landmark，再排除眼睛、眉毛、鼻子、嘴巴與臉部外輪廓。請按「分析污點」。'
-      : '已切換為「照片灰塵／小型損傷」：會分析整張照片的小黑點、小白點與小型掃描髒污。請按「分析污點」。';
+      : '已切換為「照片灰塵／小型損傷」：採孤立污點＋邊緣保護，會排除頭髮、衣服與背景等高對比交界。請按「分析污點」。';
     drawOverlay();
   });
 
@@ -3691,7 +3980,7 @@
     $('smartApplyBtn').disabled=true;
 
     if(mode==='dust'){
-      $('smartCleanInfo').textContent='正在分析照片中的小型黑點、白點與掃描髒污…';
+      $('smartCleanInfo').textContent='正在分析孤立灰塵／小型損傷，並排除高對比物體邊界…';
       await new Promise(r=>setTimeout(r,20));
       const result=analyzePhotoDustOnCanvas(source,level);
       smartSpots=result.spots || [];
@@ -3820,6 +4109,8 @@
       item.adjusted=false;
       item.done=false;
       item.autoCropped=false;
+      item.hasTransparency=false;
+      sourceHasTransparency=false;
       sourceDirty=false;
       await loadBlobIntoEditor(item.file,item.file.name,item.filters,item.autoInfo,item.file);
       resetSmartCleanInfo();
@@ -3924,16 +4215,17 @@
     btn.addEventListener('click',()=>activateRibbonTab(btn.dataset.ribbonTab));
   });
 
-  document.querySelectorAll('.tool-tab').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      const name=btn.dataset.toolTab;
-      document.querySelectorAll('.tool-tab').forEach(x=>{
-        x.classList.toggle('active',x===btn);
-      });
-      document.querySelectorAll('.tool-pane').forEach(pane=>{
-        pane.classList.toggle('active',pane.dataset.toolPane===name);
-      });
+  function activateToolTab(name){
+    document.querySelectorAll('.tool-tab').forEach(btn=>{
+      btn.classList.toggle('active',btn.dataset.toolTab===name);
     });
+    document.querySelectorAll('.tool-pane').forEach(pane=>{
+      pane.classList.toggle('active',pane.dataset.toolPane===name);
+    });
+  }
+
+  document.querySelectorAll('.tool-tab').forEach(btn=>{
+    btn.addEventListener('click',()=>activateToolTab(btn.dataset.toolTab));
   });
 
   const toggleLeftBtn=$('toggleLeftBtn');

@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <meta name="referrer" content="no-referrer" />
-<title>會員照片快速修圖工具 V12.3</title>
+<title>會員照片快速修圖工具 V12.4</title>
 <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
@@ -12,7 +12,7 @@
 
   <header class="titlebar">
     <div class="brand-row">
-      <h1>會員照片快速修圖工具 V12.3</h1>
+      <h1>會員照片快速修圖工具 V12.4</h1>
 
       <div class="mode-switch" aria-label="處理模式">
         <button id="singleModeBtn" class="active" type="button">單張修圖</button>
@@ -48,8 +48,8 @@
           <div class="ribbon-commands">
             <button id="rotateLeftBtn" disabled>↶ 左轉</button>
             <button id="rotateRightBtn" disabled>↷ 右轉</button>
-            <button id="autoHeadshotCropBtn" disabled>🎯 自動 2 吋</button>
-            <button id="cropBtn" disabled>✂ 裁切</button>
+            <button id="autoHeadshotCropBtn" disabled>🎯 2 吋裁切建議</button>
+            <button id="cropBtn" disabled>✂ 手動裁切</button>
             <button id="compareHoldBtn" disabled>👁 按住看修改前</button>
           </div>
         </div>
@@ -94,17 +94,6 @@
 
       <section class="ribbon-panel" data-ribbon-panel="view">
         <div class="ribbon-group">
-          <div class="ribbon-group-title">照片縮放</div>
-          <div class="ribbon-commands zoom-ribbon">
-            <button id="zoomOutBtn" type="button" disabled>−</button>
-            <input id="zoomRange" type="range" min="10" max="400" step="5" value="100" disabled />
-            <output id="zoomVal">100%</output>
-            <button id="zoomInBtn" type="button" disabled>＋</button>
-            <button id="fitZoomBtn" type="button" disabled>適合視窗</button>
-          </div>
-        </div>
-
-        <div class="ribbon-group">
           <div class="ribbon-group-title">工作區</div>
           <div class="ribbon-commands">
             <button id="toggleLeftBtn" type="button">☰ 照片欄</button>
@@ -144,8 +133,22 @@
       <div class="stage-top">
         <strong id="modeText">預覽</strong>
         <span class="small" id="stageHint">中央照片區固定顯示；左右工具不會帶動照片上下捲動</span>
+
+        <div class="stage-zoom" aria-label="照片縮放">
+          <button id="zoomOutBtn" type="button" title="縮小" disabled>−</button>
+          <input id="zoomRange" type="range" min="10" max="400" step="5" value="100" disabled />
+          <output id="zoomVal">100%</output>
+          <button id="zoomInBtn" type="button" title="放大" disabled>＋</button>
+          <button id="fitZoomBtn" type="button" disabled>適合視窗</button>
+        </div>
       </div>
       <div class="stage" id="stageArea">
+        <div id="cropActionBar" class="crop-action-bar" hidden>
+          <span>目前正在調整裁切範圍</span>
+          <button id="applyCropBtn" class="primary" disabled>✓ 確認並完成裁切</button>
+          <button id="cancelCropBtn" disabled>取消</button>
+        </div>
+
         <div id="empty" class="empty">
           <div style="font-size:44px">🖼️</div>
           點「上傳照片」或將照片拖曳到這裡
@@ -161,6 +164,7 @@
       <nav class="tool-tabs" aria-label="工具分類">
         <button class="tool-tab active" type="button" data-tool-tab="image">影像</button>
         <button class="tool-tab" type="button" data-tool-tab="clean">去污</button>
+        <button class="tool-tab" type="button" data-tool-tab="background">去背</button>
         <button class="tool-tab" type="button" data-tool-tab="crop">裁切</button>
         <button class="tool-tab" type="button" data-tool-tab="export">匯出</button>
       </nav>
@@ -192,7 +196,7 @@
           <div class="tool-card">
             <select id="smartCleanMode" disabled>
               <option value="face">臉部斑點／青春痘</option>
-              <option value="dust">照片灰塵／小型損傷</option>
+              <option value="dust">照片灰塵／小型損傷（邊緣保護）</option>
             </select>
             <div><div class="label"><span>偵測強度</span><output id="smartCleanLevelVal">保守</output></div>
               <input id="smartCleanLevel" type="range" min="1" max="3" step="1" value="1" disabled /></div>
@@ -213,6 +217,33 @@
           </div>
         </section>
 
+        <section class="tool-pane" data-tool-pane="background">
+          <h2>人物去背</h2>
+          <div class="tool-card">
+            <div>
+              <div class="label"><span>去背後背景</span></div>
+              <select id="bgOutputMode" disabled>
+                <option value="white">白色背景</option>
+                <option value="transparent">透明背景</option>
+              </select>
+            </div>
+
+            <div>
+              <div class="label">
+                <span>邊緣柔化</span>
+                <output id="bgFeatherVal">1.5 px</output>
+              </div>
+              <input id="bgFeather" type="range" min="0" max="4" step="0.5" value="1.5" disabled />
+            </div>
+
+            <button id="removeBgBtn" class="primary" disabled>執行人物去背</button>
+
+            <div class="small" id="bgRemoveInfo">
+              使用 MediaPipe 人物分割模型保留頭髮、臉部、身體與衣服。透明背景請使用 PNG 下載；JPG 會自動以白色填補透明區域。
+            </div>
+          </div>
+        </section>
+
         <section class="tool-pane" data-tool-pane="crop">
           <h2>裁切</h2>
           <div class="tool-card">
@@ -225,11 +256,10 @@
               <option value="0.8">4 : 5　直式</option>
               <option value="1.7777777778">16 : 9　橫式</option>
             </select>
-            <div class="row">
-              <button id="applyCropBtn" class="primary" disabled>套用裁切</button>
-              <button id="cancelCropBtn" disabled>取消裁切</button>
+            <div class="mp-note">
+              「2 吋裁切建議」或「手動裁切」啟動後，中央照片區會直接顯示
+              「確認並完成裁切」按鈕，不需要再回右側尋找套用按鈕。
             </div>
-            <div class="mp-note">單張自動 2 吋在「常用」；全批自動 2 吋在「批次」。</div>
           </div>
         </section>
 
