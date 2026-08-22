@@ -1105,7 +1105,9 @@
     $('singleModeBtn').classList.toggle('active',!batch);
     $('batchModeBtn').classList.toggle('active',batch);
     $('batchPanel').hidden=!batch;
+    if($('singleInfoPanel')) $('singleInfoPanel').hidden=batch;
     mainLayout.classList.toggle('batch-mode',batch);
+    app.classList.toggle('batch-active',batch);
     $('openBtn').textContent=batch ? '加入照片' : '上傳照片';
     $('stageHint').textContent=batch
       ? '批次模式：上一張／下一張快速檢查；局部修圖會在切換時保存'
@@ -3902,6 +3904,56 @@
       }
     }
   });
+
+  // ============================================================
+  // V12.2 fixed workspace UI: right tabs + collapsible sidebars
+  // ============================================================
+  document.querySelectorAll('.tool-tab').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const name=btn.dataset.toolTab;
+      document.querySelectorAll('.tool-tab').forEach(x=>{
+        x.classList.toggle('active',x===btn);
+      });
+      document.querySelectorAll('.tool-pane').forEach(pane=>{
+        pane.classList.toggle('active',pane.dataset.toolPane===name);
+      });
+    });
+  });
+
+  const toggleLeftBtn=$('toggleLeftBtn');
+  const toggleRightBtn=$('toggleRightBtn');
+
+  function refreshWorkspaceAfterPanelToggle(){
+    requestAnimationFrame(()=>{
+      if(source.width && zoomMode==='fit'){
+        fitZoomToStage();
+      }else if(source.width){
+        applyZoomCss();
+      }
+    });
+  }
+
+  if(toggleLeftBtn){
+    toggleLeftBtn.addEventListener('click',()=>{
+      const collapsed=app.classList.toggle('left-collapsed');
+      toggleLeftBtn.classList.toggle('active',collapsed);
+      toggleLeftBtn.textContent=collapsed ? '☰ 顯示照片欄' : '☰ 照片欄';
+      refreshWorkspaceAfterPanelToggle();
+    });
+  }
+
+  if(toggleRightBtn){
+    toggleRightBtn.addEventListener('click',()=>{
+      const collapsed=app.classList.toggle('right-collapsed');
+      toggleRightBtn.classList.toggle('active',collapsed);
+      toggleRightBtn.textContent=collapsed ? '⚙ 顯示工具欄' : '⚙ 工具欄';
+      refreshWorkspaceAfterPanelToggle();
+    });
+  }
+
+  // 單張模式預設只顯示照片資訊；批次模式切換時由 switchEditorMode 控制。
+  if($('singleInfoPanel')) $('singleInfoPanel').hidden=false;
+  app.classList.toggle('batch-active',editorMode==='batch');
 
   renderBatchList();
   syncLabels();
