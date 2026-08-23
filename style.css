@@ -186,7 +186,7 @@ canvas{display:block;max-width:none;height:auto;user-select:none;touch-action:no
 
 .right-pane{display:flex;flex-direction:column;min-width:0}
 .tool-tabs{
-  flex:0 0 auto;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:3px;
+  flex:0 0 auto;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:3px;
   padding:7px;border-bottom:1px solid var(--line);background:#f8fafc;
 }
 .tool-tab{min-height:34px;padding:4px 5px;border:1px solid transparent;background:transparent;font-size:12px}
@@ -286,7 +286,7 @@ canvas{display:block;max-width:none;height:auto;user-select:none;touch-action:no
   width:auto;min-height:34px;padding:5px 10px;
 }
 
-.tool-tabs{grid-template-columns:repeat(5,minmax(0,1fr))}
+.tool-tabs{grid-template-columns:repeat(6,minmax(0,1fr))}
 .tool-tab{padding-left:2px;padding-right:2px}
 
 @media (max-width:1450px){
@@ -579,5 +579,158 @@ canvas{display:block;max-width:none;height:auto;user-select:none;touch-action:no
   .help-dialog{
     width:calc(100vw - 24px);
     max-height:calc(100vh - 24px);
+  }
+}
+
+
+/* ============================================================
+   V13 — Member photo standardization workstation
+   ============================================================ */
+
+.v13-workflow-group .ribbon-commands{
+  flex-wrap:wrap;
+}
+
+.batch-workflow-controls{
+  flex:0 0 auto;
+  display:grid;
+  gap:6px;
+  padding:8px 0;
+  border-bottom:1px solid var(--line);
+}
+
+.batch-workflow-controls select,
+.batch-workflow-controls input{
+  min-height:34px;
+  font-size:12px;
+}
+
+.batch-workflow-buttons{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:6px;
+}
+
+.batch-workflow-buttons button{
+  min-height:34px;
+  padding:5px 7px;
+  font-size:11px;
+}
+
+.batch-workflow-buttons input{
+  width:100%;
+  min-width:0;
+}
+
+.batch-item.state-pass{border-left:4px solid #10b981}
+.batch-item.state-review{border-left:4px solid #f59e0b}
+.batch-item.state-manual{border-left:4px solid #ef4444}
+.batch-item.state-processing{border-left:4px solid #3b82f6}
+
+.batch-status.pass{background:#ecfdf5;color:#047857}
+.batch-status.review{background:#fffbeb;color:#b45309}
+.batch-status.manual{background:#fef2f2;color:#b91c1c}
+.batch-status.processing{background:#eff6ff;color:#1d4ed8}
+
+.session-restore-bar{
+  flex:0 0 auto;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-bottom:7px;
+  padding:7px 9px;
+  border:1px solid #bfdbfe;
+  border-radius:10px;
+  background:#eff6ff;
+  color:#1e3a8a;
+  font-size:12px;
+}
+.session-restore-bar[hidden]{display:none}
+.session-restore-bar span{margin-right:auto}
+.session-restore-bar button{
+  width:auto;
+  min-height:32px;
+  padding:4px 8px;
+}
+
+.quality-summary{
+  padding:11px 12px;
+  border-radius:10px;
+  border:1px solid var(--line);
+  font-weight:800;
+  text-align:center;
+}
+.quality-summary.idle{background:#f8fafc;color:#64748b}
+.quality-summary.pass{background:#ecfdf5;border-color:#a7f3d0;color:#047857}
+.quality-summary.warn{background:#fffbeb;border-color:#fde68a;color:#b45309}
+.quality-summary.fail{background:#fef2f2;border-color:#fecaca;color:#b91c1c}
+
+.quality-list{
+  display:grid;
+  gap:6px;
+}
+.quality-row{
+  display:grid;
+  grid-template-columns:22px minmax(0,1fr) auto;
+  gap:7px;
+  align-items:center;
+  padding:7px 8px;
+  border:1px solid #e2e8f0;
+  border-radius:8px;
+  font-size:12px;
+}
+.quality-row .quality-value{color:#64748b;text-align:right}
+.quality-icon.pass{color:#059669}
+.quality-icon.warn{color:#d97706}
+.quality-icon.fail{color:#dc2626}
+
+.engine-info{
+  display:grid;
+  gap:7px;
+}
+.engine-info > div{
+  display:flex;
+  justify-content:space-between;
+  gap:8px;
+  padding:7px 8px;
+  border:1px solid #e2e8f0;
+  border-radius:8px;
+  font-size:12px;
+}
+.engine-info b{color:#475569}
+
+/* Background mask refinement */
+.mask-active #preview{
+  cursor:crosshair !important;
+}
+
+/* Before/After slider */
+.compare-slider-active #preview{
+  cursor:col-resize !important;
+}
+
+.workflow-toast{
+  position:absolute;
+  left:50%;
+  bottom:18px;
+  transform:translateX(-50%);
+  z-index:35;
+  max-width:min(680px,calc(100% - 30px));
+  padding:9px 13px;
+  border:1px solid #93c5fd;
+  border-radius:10px;
+  background:rgba(255,255,255,.96);
+  box-shadow:0 8px 26px rgba(15,23,42,.18);
+  color:#1e3a8a;
+  font-size:12px;
+  font-weight:700;
+  text-align:center;
+}
+.workflow-toast[hidden]{display:none}
+
+@media (max-width:1450px){
+  .v13-workflow-group .ribbon-commands button{
+    padding-left:7px;
+    padding-right:7px;
   }
 }

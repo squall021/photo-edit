@@ -4,15 +4,15 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <meta name="referrer" content="no-referrer" />
-<title>會員照片快速修圖工具 V12.12</title>
-<link rel="stylesheet" href="./style.css?v=12.12" />
+<title>會員照片標準化工作站 V13</title>
+<link rel="stylesheet" href="./style.css?v=13.0" />
 </head>
 <body>
 <div class="app desktop-app" id="app">
 
   <header class="titlebar">
     <div class="brand-row">
-      <h1>會員照片快速修圖工具 V12.12</h1>
+      <h1>會員照片標準化工作站 V13</h1>
 
       <div class="mode-switch" aria-label="處理模式">
         <button id="singleModeBtn" class="active" type="button">單張修圖</button>
@@ -42,6 +42,16 @@
             <input id="fileInput" type="file" accept="image/*" hidden />
             <input id="batchFileInput" type="file" accept="image/*" multiple hidden />
             <button id="resetAllBtn" disabled>還原原圖</button>
+          </div>
+        </div>
+
+        <div class="ribbon-group v13-workflow-group">
+          <div class="ribbon-group-title">會員照</div>
+          <div class="ribbon-commands">
+            <button id="standardizeBtn" class="primary" disabled>✨ 一鍵標準化</button>
+            <button id="autoStraightenBtn" disabled>↔ 自動轉正</button>
+            <button id="qualityCheckBtn" disabled>✓ 品質檢查</button>
+            <button id="compareSliderBtn" disabled>◫ 滑動比較</button>
           </div>
         </div>
 
@@ -106,6 +116,14 @@
             <button id="toggleRightBtn" type="button">⚙ 工具欄</button>
           </div>
         </div>
+
+        <div class="ribbon-group">
+          <div class="ribbon-group-title">工作階段</div>
+          <div class="ribbon-commands">
+            <button id="saveSessionBtn" type="button">💾 儲存</button>
+            <button id="clearSessionBtn" type="button">清除儲存</button>
+          </div>
+        </div>
       </section>
     </div>
   </header>
@@ -122,6 +140,36 @@
             </div>
           </div>
         </div>
+
+        <div class="batch-workflow-controls">
+          <select id="batchStatusFilter" title="依處理狀態篩選">
+            <option value="all">全部狀態</option>
+            <option value="unprocessed">未處理</option>
+            <option value="pass">合格</option>
+            <option value="review">待確認</option>
+            <option value="manual">需人工</option>
+            <option value="done">已完成</option>
+          </select>
+
+          <select id="batchWorkflowPreset" title="批次標準化流程">
+            <option value="member-white">會員卡標準｜白底</option>
+            <option value="member-keep-bg">會員卡標準｜保留背景</option>
+            <option value="crop-only">只做 2 吋裁切</option>
+            <option value="transparent">會員卡標準｜透明背景</option>
+          </select>
+
+          <div class="batch-workflow-buttons">
+            <button id="batchWorkflowRunBtn" class="primary" disabled>✨ 執行預設流程</button>
+            <button id="batchQualityBtn" disabled>✓ 批次品質檢查</button>
+          </div>
+
+          <div class="batch-workflow-buttons">
+            <button id="batchNamesBtn" disabled>匯入名稱清單</button>
+            <input id="batchNamesInput" type="file" accept=".txt,.csv,text/plain,text/csv" hidden />
+            <input id="batchCurrentName" type="text" placeholder="目前照片輸出名稱（可選）" disabled />
+          </div>
+        </div>
+
         <div id="batchProgress" class="batch-progress"></div>
         <div id="batchList" class="batch-list"></div>
       </div>
@@ -133,6 +181,12 @@
     </aside>
 
     <section class="workspace-pane stage-panel" id="dropZone">
+      <div id="sessionRestoreBar" class="session-restore-bar" hidden>
+        <span id="sessionRestoreText">偵測到上次未完成的工作階段。</span>
+        <button id="restoreSessionBtn" class="primary" type="button">繼續上次工作</button>
+        <button id="discardSessionBtn" type="button">不要恢復</button>
+      </div>
+
       <div class="stage-top">
         <strong id="modeText">預覽</strong>
         <span class="small" id="stageHint">中央照片區固定顯示；左右工具不會帶動照片上下捲動</span>
@@ -152,6 +206,8 @@
           <button id="cancelCropBtn" disabled>取消</button>
         </div>
 
+        <div id="workflowToast" class="workflow-toast" hidden></div>
+
         <div id="empty" class="empty">
           <div style="font-size:44px">🖼️</div>
           點「上傳照片」或將照片拖曳到這裡
@@ -169,6 +225,7 @@
         <button class="tool-tab" type="button" data-tool-tab="clean">去污</button>
         <button class="tool-tab" type="button" data-tool-tab="background">去背</button>
         <button class="tool-tab" type="button" data-tool-tab="crop">裁切</button>
+        <button class="tool-tab" type="button" data-tool-tab="inspect">檢查</button>
         <button class="tool-tab" type="button" data-tool-tab="export">匯出</button>
       </nav>
 
@@ -245,6 +302,33 @@
               使用 MediaPipe 人物分割模型保留頭髮、臉部、身體與衣服。透明背景請使用 PNG 下載；JPG 會自動以白色填補透明區域。
             </div>
           </div>
+
+          <h2>去背遮罩細修</h2>
+          <div class="tool-card">
+            <button id="maskAnalyzeBtn" disabled>分析並顯示遮罩</button>
+
+            <div class="row">
+              <button id="maskKeepBtn" disabled>＋ 保留人物</button>
+              <button id="maskRemoveBtn" disabled>－ 移除背景</button>
+            </div>
+
+            <div>
+              <div class="label">
+                <span>遮罩筆刷</span>
+                <output id="maskBrushVal">28 px</output>
+              </div>
+              <input id="maskBrush" type="range" min="8" max="100" value="28" disabled />
+            </div>
+
+            <div class="row">
+              <button id="maskApplyBtn" class="primary" disabled>套用細修遮罩</button>
+              <button id="maskCancelBtn" disabled>取消細修</button>
+            </div>
+
+            <div class="small" id="maskInfo">
+              先分析遮罩，再用「保留人物／移除背景」筆刷修正頭髮、耳朵或肩膀邊緣。
+            </div>
+          </div>
         </section>
 
         <section class="tool-pane" data-tool-pane="crop">
@@ -267,6 +351,34 @@
           </div>
         </section>
 
+        <section class="tool-pane" data-tool-pane="inspect">
+          <h2>照片品質檢查</h2>
+          <div class="tool-card">
+            <div id="qualitySummary" class="quality-summary idle">
+              尚未檢查
+            </div>
+
+            <div id="qualityList" class="quality-list">
+              <div class="small">檢查項目包含：2 吋比例、臉部數量、頭部比例、置中、歪斜、解析度、清晰度與背景。</div>
+            </div>
+
+            <div class="row">
+              <button id="inspectRunBtn" class="primary" disabled>執行品質檢查</button>
+              <button id="inspectStandardizeBtn" disabled>一鍵標準化</button>
+            </div>
+          </div>
+
+          <h2>AI 引擎</h2>
+          <div class="tool-card">
+            <div id="aiEngineInfo" class="engine-info">
+              <div><span>Face Landmarker</span><b id="engineFaceStatus">載入中</b></div>
+              <div><span>Image Segmenter</span><b id="engineSegmentStatus">按需載入</b></div>
+            </div>
+            <button id="releaseAiCacheBtn" type="button">釋放去背引擎記憶體</button>
+            <div class="small">V13 只在需要去背時載入 Image Segmenter；批次處理會逐張執行並讓瀏覽器有時間釋放中間 Canvas。</div>
+          </div>
+        </section>
+
         <section class="tool-pane" data-tool-pane="export">
           <h2>輸出尺寸</h2>
           <div class="tool-card">
@@ -283,6 +395,22 @@
               <input id="outH" type="number" min="1" placeholder="高度" disabled />
             </div>
             <label class="small"><input id="keepRatio" type="checkbox" checked /> 維持原圖比例</label>
+          </div>
+
+          <h2>批次檔名</h2>
+          <div class="tool-card">
+            <select id="batchNameRule">
+              <option value="original">原檔名_edited</option>
+              <option value="index-original">序號_原檔名</option>
+              <option value="assigned">使用匯入／手動名稱</option>
+              <option value="template">自訂範本</option>
+            </select>
+
+            <input id="batchNameTemplate" type="text" value="{index}_{original}" placeholder="{index}_{original}" />
+
+            <div class="small">
+              可用：{index}、{original}、{date}、{status}。也可在批次左欄匯入 TXT/CSV 名稱清單。
+            </div>
           </div>
 
           <h2>下載</h2>
@@ -315,7 +443,7 @@
     <div class="help-dialog-header">
       <div>
         <h2 id="helpTitle">❓ 操作教學</h2>
-        <div class="small">會員照片快速修圖工具 V12.12</div>
+        <div class="small">會員照片標準化工作站 V13</div>
       </div>
       <button id="helpCloseBtn" class="help-close-btn" type="button" aria-label="關閉操作教學">✕</button>
     </div>
@@ -378,7 +506,7 @@
       </div>
 
       <div class="help-tip">
-        建議工作流程：上傳 → 2 吋裁切 → 智慧提亮 → 智慧去污／去背 → 放大檢查 → 匯出。
+        V13 建議工作流程：上傳 →「✨ 一鍵標準化」→ 品質檢查 → 只處理「待確認／需人工」照片 → 匯出。
       </div>
     </div>
 
@@ -435,6 +563,6 @@
 })();
 </script>
 
-<script type="module" src="./app.js?v=12.12"></script>
+<script type="module" src="./app.js?v=13.0"></script>
 </body>
 </html>

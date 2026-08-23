@@ -47,6 +47,12 @@
       box.classList.add(kind);
     }
     if(label) label.textContent=text;
+    if($('engineFaceStatus')){
+      $('engineFaceStatus').textContent=
+        kind==='ready' ? '已就緒' :
+        kind==='error' ? '載入失敗' :
+        '載入中';
+    }
   }
 
   function withTimeout(promise,ms,label){
@@ -205,9 +211,11 @@
           console.warn("ImageSegmenter GPU 初始化失敗，改用 CPU/WASM。",gpuError);
           mpImageSegmenter=await createMediaPipeImageSegmenter(null);
         }
+        if($('engineSegmentStatus')) $('engineSegmentStatus').textContent='已載入';
         return mpImageSegmenter;
       }catch(err){
         mpSegmenterPromise=null;
+        if($('engineSegmentStatus')) $('engineSegmentStatus').textContent='載入失敗';
         throw err;
       }
     })();
@@ -992,10 +1000,34 @@
   let compareSavedModeText = '';
   let sourceHasTransparency = false;
 
+  // V13 workflow / inspection / compare / mask / session state
+  let workflowBusy = false;
+  let lastQualityResult = null;
+
+  let compareSliderMode = false;
+  let compareSliderPosition = .5;
+  let compareSliderDragging = false;
+
+  let bgMaskEditing = false;
+  let bgMaskCanvas = null;
+  let bgMaskBaseCanvas = null;
+  let bgMaskBrushMode = 'keep';
+  let bgMaskDragging = false;
+  let bgMaskCursor = null;
+
+  let sessionSaveTimer = null;
+  let sessionSaveInProgress = false;
+  let sessionRestoreCandidate = null;
+  const V13_SESSION_DB = 'member-photo-workstation-v13';
+  const V13_SESSION_STORE = 'sessions';
+  const V13_SESSION_KEY = 'last-session';
+
+
   const controls = [
     'rotateLeftBtn','rotateRightBtn','autoHeadshotCropBtn','cropBtn','cropRatio','brightness','contrast','saturation','sharpen',
-    'autoBtn','quickBrightBtn','compareHoldBtn','resetFilterBtn','smartAnalyzeBtn','smartCleanMode','smartCleanLevel','smartClearBtn',
-    'healBtn','brush','bgOutputMode','bgFeather','removeBgBtn','downloadJpgBtn','downloadPngBtn','resetAllBtn',
+    'autoBtn','quickBrightBtn','compareHoldBtn','compareSliderBtn','resetFilterBtn','smartAnalyzeBtn','smartCleanMode','smartCleanLevel','smartClearBtn',
+    'standardizeBtn','autoStraightenBtn','qualityCheckBtn','inspectRunBtn','inspectStandardizeBtn',
+    'healBtn','brush','bgOutputMode','bgFeather','removeBgBtn','maskAnalyzeBtn','downloadJpgBtn','downloadPngBtn','resetAllBtn',
     'zoomOutBtn','zoomInBtn','zoomRange','fitZoomBtn'
   ];
 
@@ -1041,10 +1073,36 @@
     return {brightness:100,contrast:100,saturation:100,sharpen:0};
   }
 
+  function getBatchWorkflowState(item){
+    if(item.done) return 'done';
+    if(item.workflowState && item.workflowState!=='unprocessed') return item.workflowState;
+    if(item.quality?.status==='pass') return 'pass';
+    if(item.quality?.status==='warn') return 'review';
+    if(item.quality?.status==='fail') return 'manual';
+    if(item.adjusted || item.editedBlob) return 'review';
+    return 'unprocessed';
+  }
+
   function getBatchStatusText(item){
-    if(item.done) return '已完成';
-    if(item.adjusted || item.editedBlob) return '已調整';
-    return '待處理';
+    const state=getBatchWorkflowState(item);
+    return {
+      done:'已完成',
+      pass:'合格',
+      review:'待確認',
+      manual:'需人工',
+      processing:'處理中',
+      unprocessed:'未處理'
+    }[state] || '未處理';
+  }
+
+  function batchStatusClass(item){
+    const state=getBatchWorkflowState(item);
+    return ['pass','review','manual','processing'].includes(state) ? state : '';
+  }
+
+  function batchFilterMatches(item,filter){
+    if(!filter || filter==='all') return true;
+    return getBatchWorkflowState(item)===filter;
   }
 
   function showBatchProgress(text, show=true){
@@ -1063,6 +1121,10 @@
     $('batchCleanBtn').disabled=!has || batchBusy;
     $('batchBgWhiteBtn').disabled=!has || batchBusy;
     $('batchBgTransparentBtn').disabled=!has || batchBusy;
+    if($('batchWorkflowRunBtn')) $('batchWorkflowRunBtn').disabled=!has || batchBusy;
+    if($('batchQualityBtn')) $('batchQualityBtn').disabled=!has || batchBusy;
+    if($('batchNamesBtn')) $('batchNamesBtn').disabled=!has || batchBusy;
+    if($('batchCurrentName')) $('batchCurrentName').disabled=!active || batchBusy;
     $('batchDoneBtn').disabled=!active || batchBusy;
     $('batchZipBtn').disabled=!has || batchBusy;
     $('batchClearBtn').disabled=!has || batchBusy;
@@ -1074,9 +1136,17 @@
   function renderBatchList(){
     const list=$('batchList');
     list.innerHTML='';
+
+    const filter=$('batchStatusFilter')?.value || 'all';
+
     batchItems.forEach((item,index)=>{
+      if(!batchFilterMatches(item,filter)) return;
+
+      const state=getBatchWorkflowState(item);
       const row=document.createElement('div');
-      row.className='batch-item' + (index===batchIndex ? ' active' : '');
+      row.className='batch-item' +
+        (index===batchIndex ? ' active' : '') +
+        (['pass','review','manual','processing'].includes(state) ? ` state-${state}` : '');
       row.dataset.index=index;
 
       const img=document.createElement('img');
@@ -1090,11 +1160,18 @@
       const name=document.createElement('div');
       name.className='batch-name';
       name.title=item.file.name;
-      name.textContent=item.file.name;
+      name.textContent=item.outputName
+        ? `${item.file.name} → ${item.outputName}`
+        : item.file.name;
 
       const status=document.createElement('span');
-      status.className='batch-status' + (item.done ? ' done' : (item.adjusted || item.editedBlob ? ' adjusted' : ''));
+      const cls=batchStatusClass(item);
+      status.className='batch-status' + (cls ? ` ${cls}` : '');
       status.textContent=getBatchStatusText(item);
+
+      if(item.quality?.score!=null){
+        status.title=`品質分數 ${item.quality.score}`;
+      }
 
       main.append(name,status);
       row.append(img,main);
@@ -1102,8 +1179,22 @@
       list.appendChild(row);
     });
 
+    const pass=batchItems.filter(x=>getBatchWorkflowState(x)==='pass').length;
+    const review=batchItems.filter(x=>getBatchWorkflowState(x)==='review').length;
+    const manual=batchItems.filter(x=>getBatchWorkflowState(x)==='manual').length;
+    const done=batchItems.filter(x=>x.done).length;
+
     $('batchCount').textContent=`共 ${batchItems.length} 張`;
-    $('batchDoneCount').textContent=`完成 ${batchItems.filter(x=>x.done).length} 張`;
+    $('batchDoneCount').textContent=`合格 ${pass}｜確認 ${review}｜人工 ${manual}｜完成 ${done}`;
+
+    if($('batchCurrentName')){
+      const active=batchItems[batchIndex];
+      const value=active?.outputName || '';
+      if(document.activeElement!==$('batchCurrentName')){
+        $('batchCurrentName').value=value;
+      }
+    }
+
     updateBatchButtons();
   }
 
@@ -1114,7 +1205,11 @@
     if(!item.done) item.adjusted=true;
     item.filters=getCurrentFilterState();
     item.autoInfo=$('autoInfo').textContent;
+    if(!item.workflowState || item.workflowState==='unprocessed'){
+      item.workflowState='review';
+    }
     renderBatchList();
+    scheduleSessionSave();
   }
 
   async function saveCurrentBatchItem(){
@@ -1134,6 +1229,7 @@
       }
       sourceDirty=false;
     }
+    if(!sessionSaveInProgress) scheduleSessionSave();
   }
 
   async function setCompareOriginalFromBlob(blob){
@@ -1171,6 +1267,7 @@
 
   function startCompareBefore(){
     if(!compareOriginalImage || !source.width) return;
+    if(compareSliderMode) toggleCompareSlider();
     compareHolding=true;
     compareSavedModeText=$('modeText').textContent;
     $('compareHoldBtn').classList.add('active');
@@ -1193,6 +1290,11 @@
       originalImage=img;
       originalName=name.replace(/\.[^.]+$/,'') || 'photo';
       compareHolding=false;
+      compareSliderMode=false;
+      compareSliderDragging=false;
+      bgMaskEditing=false;
+      bgMaskCanvas=null;
+      bgMaskBaseCanvas=null;
       sourceHasTransparency=!!hasTransparency;
       compareOriginalImage = compareBlob ? await blobToImage(compareBlob) : img;
 
@@ -1261,6 +1363,13 @@
     );
 
     $('modeText').textContent=`批次處理：第 ${index+1} / ${batchItems.length} 張`;
+    if(item.quality){
+      renderQualityResult(item.quality);
+    }else if($('qualitySummary') && $('qualityList')){
+      $('qualitySummary').className='quality-summary idle';
+      $('qualitySummary').textContent='尚未檢查';
+      $('qualityList').innerHTML='<div class="small">此照片尚未執行 V13 品質檢查。</div>';
+    }
     renderBatchList();
   }
 
@@ -1284,6 +1393,12 @@
     sourceHasTransparency=false;
     compareOriginalImage=null;
     compareHolding=false;
+    compareSliderMode=false;
+    compareSliderDragging=false;
+    bgMaskEditing=false;
+    bgMaskCanvas=null;
+    bgMaskBaseCanvas=null;
+    app.classList.remove('compare-slider-active','mask-active');
   }
 
   async function switchEditorMode(mode){
@@ -1339,7 +1454,11 @@
         adjusted:false,
         done:false,
         autoCropped:false,
-        hasTransparency:false
+        hasTransparency:false,
+        workflowState:'unprocessed',
+        quality:null,
+        outputName:'',
+        workflowPreset:''
       });
     }
 
@@ -1347,6 +1466,7 @@
     if(batchIndex<0){
       await loadBatchItem(0);
     }
+    scheduleSessionSave();
   }
 
   async function analyzeBlobBrightness(blob){
@@ -1741,7 +1861,9 @@
       outW:parseInt($('outW').value)||0,
       outH:parseInt($('outH').value)||0,
       keepRatio:$('keepRatio').checked,
-      quality:+$('quality').value/100
+      quality:+$('quality').value/100,
+      nameRule:$('batchNameRule')?.value || 'original',
+      nameTemplate:$('batchNameTemplate')?.value || '{index}_{original}'
     };
   }
 
@@ -1905,6 +2027,40 @@
     return filename.replace(/\.[^.]+$/,'').replace(/[\\/:*?"<>|]/g,'_').trim() || 'photo';
   }
 
+  function sanitizeOutputName(name){
+    return String(name || '')
+      .replace(/\.[^.]+$/,'')
+      .replace(/[\\/:*?"<>|]/g,'_')
+      .trim() || 'photo';
+  }
+
+  function formatBatchOutputBase(item,index,settings){
+    const original=cleanZipBaseName(item.file.name);
+    const assigned=sanitizeOutputName(item.outputName || '');
+    const pad=String(index+1).padStart(3,'0');
+    const now=new Date();
+    const date=`${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+    const status=getBatchStatusText(item);
+
+    switch(settings.nameRule){
+      case 'index-original':
+        return `${pad}_${original}`;
+      case 'assigned':
+        return assigned && item.outputName ? assigned : `${pad}_${original}`;
+      case 'template':{
+        let t=settings.nameTemplate || '{index}_{original}';
+        t=t
+          .replaceAll('{index}',pad)
+          .replaceAll('{original}',original)
+          .replaceAll('{date}',date)
+          .replaceAll('{status}',status);
+        return sanitizeOutputName(t);
+      }
+      default:
+        return `${original}_edited`;
+    }
+  }
+
   async function exportBatchZip(){
     if(!batchItems.length || batchBusy) return;
     await saveCurrentBatchItem();
@@ -1925,7 +2081,7 @@
           `輸出 ${output.extension.toUpperCase()}：${i+1} / ${batchItems.length}　${item.file.name}`
         );
 
-        let base=cleanZipBaseName(item.file.name) + '_edited';
+        let base=formatBatchOutputBase(item,i,settings);
         const count=(used.get(base)||0)+1;
         used.set(base,count);
         if(count>1) base += '_' + count;
@@ -3146,6 +3302,9 @@
       octx.stroke();
       octx.restore();
     }
+
+    if(bgMaskEditing) drawMaskOverlay();
+    if(compareSliderMode) drawCompareSliderOverlay();
   }
 
   function normalizedRect(r){
@@ -3547,6 +3706,7 @@
     if(history.length > 15) history.shift();
     historyIndex = history.length-1;
     updateHistoryButtons();
+    if(!loadingBatchItem) scheduleSessionSave();
   }
 
   async function restoreHistory(index){
@@ -3581,6 +3741,11 @@
       originalImage=img;
       compareOriginalImage=img;
       compareHolding=false;
+      compareSliderMode=false;
+      compareSliderDragging=false;
+      bgMaskEditing=false;
+      bgMaskCanvas=null;
+      bgMaskBaseCanvas=null;
       sourceHasTransparency=false;
       source.width=img.naturalWidth;
       source.height=img.naturalHeight;
@@ -3611,6 +3776,11 @@
       empty.hidden=true;
       setEnabled(true);
       updateMeta();
+      if($('qualitySummary') && $('qualityList')){
+        $('qualitySummary').className='quality-summary idle';
+        $('qualitySummary').textContent='尚未檢查';
+        $('qualityList').innerHTML='<div class="small">檢查項目包含：2 吋比例、臉部數量、頭部比例、置中、歪斜、解析度、清晰度與背景。</div>';
+      }
       renderPreview();
       URL.revokeObjectURL(url);
     };
@@ -3830,6 +4000,1110 @@
     },type,quality);
   }
 
+
+  // ============================================================
+  // V13 — standardization / inspection / queue / session
+  // ============================================================
+
+  function cloneCanvas(input){
+    const c=document.createElement('canvas');
+    c.width=input.width;
+    c.height=input.height;
+    c.getContext('2d',{willReadFrequently:true}).drawImage(input,0,0);
+    return c;
+  }
+
+  function replaceSourceCanvas(input,{transparent=sourceHasTransparency,markDirty=true}={}){
+    source.width=input.width;
+    source.height=input.height;
+    sctx.clearRect(0,0,source.width,source.height);
+    sctx.drawImage(input,0,0);
+    sourceHasTransparency=!!transparent;
+    if(markDirty) sourceDirty=true;
+  }
+
+  function cropCanvasBySourceRect(input,rect){
+    const x=Math.max(0,Math.round(rect.x));
+    const y=Math.max(0,Math.round(rect.y));
+    const w=Math.max(1,Math.min(input.width-x,Math.round(rect.w)));
+    const h=Math.max(1,Math.min(input.height-y,Math.round(rect.h)));
+    const out=document.createElement('canvas');
+    out.width=w;
+    out.height=h;
+    out.getContext('2d',{willReadFrequently:true})
+      .drawImage(input,x,y,w,h,0,0,w,h);
+    return out;
+  }
+
+  function rotateCanvasExpanded(input,degrees,transparent=false){
+    const rad=degrees*Math.PI/180;
+    const cos=Math.abs(Math.cos(rad));
+    const sin=Math.abs(Math.sin(rad));
+    const out=document.createElement('canvas');
+    out.width=Math.max(1,Math.ceil(input.width*cos+input.height*sin));
+    out.height=Math.max(1,Math.ceil(input.width*sin+input.height*cos));
+    const ctx=out.getContext('2d',{willReadFrequently:true});
+    if(!transparent){
+      ctx.fillStyle='#ffffff';
+      ctx.fillRect(0,0,out.width,out.height);
+    }
+    ctx.translate(out.width/2,out.height/2);
+    ctx.rotate(rad);
+    ctx.drawImage(input,-input.width/2,-input.height/2);
+    return out;
+  }
+
+  async function detectAllMediaPipeFaces(inputCanvas){
+    const landmarker=await initMediaPipeFaceLandmarker();
+    const result=landmarker.detect(inputCanvas);
+    const faces=result?.faceLandmarks || [];
+    return faces.map(landmarks=>{
+      const points=mpLandmarkPixels(landmarks,inputCanvas);
+      const bbox=mpBounds(points,MP_FACE_OVAL);
+      return {
+        landmarks,
+        points,
+        bbox,
+        area:bbox ? bbox.w*bbox.h : 0
+      };
+    }).filter(x=>x.bbox);
+  }
+
+  function getFaceTiltDegrees(face){
+    if(!face?.points) return 0;
+    const left=mpAveragePoint(face.points,MP_LEFT_EYE);
+    const right=mpAveragePoint(face.points,MP_RIGHT_EYE);
+    let angle=Math.atan2(right.y-left.y,right.x-left.x)*180/Math.PI;
+    if(angle>90) angle-=180;
+    if(angle<-90) angle+=180;
+    return angle;
+  }
+
+  async function straightenCanvasMP(inputCanvas,{maxAngle=15,transparent=false}={}){
+    const face=await detectMediaPipeFace(inputCanvas);
+    if(!face) return {canvas:inputCanvas,angle:0,changed:false,reason:'no-face'};
+    const angle=getFaceTiltDegrees(face);
+    if(Math.abs(angle)<.55) return {canvas:inputCanvas,angle,changed:false,reason:'already-straight'};
+    if(Math.abs(angle)>maxAngle) return {canvas:inputCanvas,angle,changed:false,reason:'too-large'};
+    const rotated=rotateCanvasExpanded(inputCanvas,-angle,transparent);
+    return {canvas:rotated,angle,changed:true,reason:'ok'};
+  }
+
+  function analyzeCanvasBrightnessV13(inputCanvas){
+    const maxSide=180;
+    const scale=Math.min(1,maxSide/inputCanvas.width,maxSide/inputCanvas.height);
+    const w=Math.max(1,Math.round(inputCanvas.width*scale));
+    const h=Math.max(1,Math.round(inputCanvas.height*scale));
+    const c=document.createElement('canvas');
+    c.width=w;c.height=h;
+    const ctx=c.getContext('2d',{willReadFrequently:true});
+    ctx.drawImage(inputCanvas,0,0,w,h);
+    const data=ctx.getImageData(0,0,w,h).data;
+    const overall=new Uint32Array(256);
+    const center=new Uint32Array(256);
+    let oc=0,cc=0;
+    const x1=w*.20,x2=w*.80,y1=h*.10,y2=h*.90;
+    for(let y=0;y<h;y++){
+      for(let x=0;x<w;x++){
+        const i=(y*w+x)*4;
+        if(data[i+3]<16) continue;
+        const lum=Math.max(0,Math.min(255,Math.round(
+          data[i]*.2126+data[i+1]*.7152+data[i+2]*.0722
+        )));
+        overall[lum]++;oc++;
+        if(x>=x1&&x<=x2&&y>=y1&&y<=y2){
+          center[lum]++;cc++;
+        }
+      }
+    }
+    const all=histogramStats(overall,oc);
+    const cen=histogramStats(center,cc||oc);
+    return {
+      reference:cc ? cen.mean*.72+all.mean*.28 : all.mean,
+      dynamicRange:Math.max(1,all.p90-all.p10),
+      overall:all,
+      center:cen
+    };
+  }
+
+  function applySmartBrightnessCanvas(inputCanvas){
+    const stats=analyzeCanvasBrightnessV13(inputCanvas);
+    const adj=calculateSmartAdjustments(stats);
+    const out=document.createElement('canvas');
+    out.width=inputCanvas.width;
+    out.height=inputCanvas.height;
+    const ctx=out.getContext('2d',{willReadFrequently:true});
+    ctx.filter=`brightness(${adj.brightness}%) contrast(${adj.contrast}%) saturate(${adj.saturation}%)`;
+    ctx.drawImage(inputCanvas,0,0);
+    ctx.filter='none';
+    if(adj.sharpen>0){
+      const img=ctx.getImageData(0,0,out.width,out.height);
+      applySharpen(img,out.width,out.height,adj.sharpen);
+      ctx.putImageData(img,0,0);
+    }
+    return {canvas:out,adjustments:adj,stats};
+  }
+
+  function analyzeBackgroundStats(inputCanvas){
+    const maxSide=360;
+    const scale=Math.min(1,maxSide/inputCanvas.width,maxSide/inputCanvas.height);
+    const w=Math.max(1,Math.round(inputCanvas.width*scale));
+    const h=Math.max(1,Math.round(inputCanvas.height*scale));
+    const c=document.createElement('canvas');
+    c.width=w;c.height=h;
+    const ctx=c.getContext('2d',{willReadFrequently:true});
+    ctx.drawImage(inputCanvas,0,0,w,h);
+    const d=ctx.getImageData(0,0,w,h).data;
+    const border=Math.max(2,Math.round(Math.min(w,h)*.07));
+    let total=0,white=0,transparent=0,sum=0;
+    for(let y=0;y<h;y++){
+      for(let x=0;x<w;x++){
+        if(x>=border&&x<w-border&&y>=border&&y<h-border) continue;
+        const i=(y*w+x)*4;
+        total++;
+        if(d[i+3]<32){transparent++;continue;}
+        const max=Math.max(d[i],d[i+1],d[i+2]);
+        const min=Math.min(d[i],d[i+1],d[i+2]);
+        const lum=d[i]*.2126+d[i+1]*.7152+d[i+2]*.0722;
+        sum+=lum;
+        if(d[i]>235&&d[i+1]>235&&d[i+2]>235&&(max-min)<18) white++;
+      }
+    }
+    return {
+      whiteRatio:total ? white/total : 0,
+      transparentRatio:total ? transparent/total : 0,
+      meanLuma:(total-transparent)>0 ? sum/(total-transparent) : 255
+    };
+  }
+
+  function calcSharpnessScore(inputCanvas){
+    const maxSide=420;
+    const scale=Math.min(1,maxSide/inputCanvas.width,maxSide/inputCanvas.height);
+    const w=Math.max(3,Math.round(inputCanvas.width*scale));
+    const h=Math.max(3,Math.round(inputCanvas.height*scale));
+    const c=document.createElement('canvas');
+    c.width=w;c.height=h;
+    const ctx=c.getContext('2d',{willReadFrequently:true});
+    ctx.drawImage(inputCanvas,0,0,w,h);
+    const d=ctx.getImageData(0,0,w,h).data;
+    const g=new Float32Array(w*h);
+    for(let p=0;p<w*h;p++){
+      const i=p*4;
+      g[p]=d[i]*.2126+d[i+1]*.7152+d[i+2]*.0722;
+    }
+    let sum=0,sum2=0,n=0;
+    for(let y=1;y<h-1;y++){
+      for(let x=1;x<w-1;x++){
+        const p=y*w+x;
+        const lap=4*g[p]-g[p-1]-g[p+1]-g[p-w]-g[p+w];
+        sum+=lap;sum2+=lap*lap;n++;
+      }
+    }
+    if(!n) return 0;
+    const mean=sum/n;
+    return Math.max(0,sum2/n-mean*mean);
+  }
+
+  function qualityStatusByRange(value,passMin,passMax,warnMin,warnMax){
+    if(value>=passMin&&value<=passMax) return 'pass';
+    if(value>=warnMin&&value<=warnMax) return 'warn';
+    return 'fail';
+  }
+
+  async function inspectCanvasQuality(inputCanvas){
+    const faces=await detectAllMediaPipeFaces(inputCanvas);
+    const face=faces.slice().sort((a,b)=>b.area-a.area)[0] || null;
+    const ratio=inputCanvas.width/inputCanvas.height;
+    const targetRatio=3.5/4.5;
+    const ratioDiff=Math.abs(ratio-targetRatio);
+
+    const checks=[];
+    const add=(key,label,value,status,detail='')=>{
+      checks.push({key,label,value,status,detail});
+    };
+
+    add(
+      'ratio','2 吋比例',
+      `${inputCanvas.width}:${inputCanvas.height}`,
+      ratioDiff<=.015?'pass':ratioDiff<=.055?'warn':'fail',
+      '目標 3.5 : 4.5'
+    );
+
+    add(
+      'faces','人臉數量',
+      `${faces.length} 人`,
+      faces.length===1?'pass':'fail',
+      '會員照建議只有 1 張臉'
+    );
+
+    let tilt=0,coverage=0,centerOffset=1,headTopRatio=0;
+    if(face){
+      tilt=getFaceTiltDegrees(face);
+      const chin=face.points[152]?.y ?? (face.bbox.y+face.bbox.h);
+      const headTop=mpFindHeadTop(inputCanvas,face);
+      coverage=(chin-headTop)/inputCanvas.height;
+      centerOffset=Math.abs((face.bbox.x+face.bbox.w/2)/inputCanvas.width-.5);
+      headTopRatio=headTop/inputCanvas.height;
+
+      add(
+        'coverage','頭頂至下顎比例',
+        `${Math.round(coverage*100)}%`,
+        qualityStatusByRange(coverage,.70,.80,.65,.84),
+        '目標 70%～80%'
+      );
+      add(
+        'center','人臉置中',
+        `偏移 ${Math.round(centerOffset*100)}%`,
+        centerOffset<=.04?'pass':centerOffset<=.08?'warn':'fail',
+        '水平中心偏移越小越好'
+      );
+      add(
+        'tilt','臉部歪斜',
+        `${tilt.toFixed(1)}°`,
+        Math.abs(tilt)<=2?'pass':Math.abs(tilt)<=5?'warn':'fail',
+        '以雙眼 Landmark 判斷'
+      );
+      add(
+        'headTop','頭頂留白',
+        `${Math.round(headTopRatio*100)}%`,
+        headTopRatio>=.015&&headTopRatio<=.13?'pass':
+          headTopRatio>=0&&headTopRatio<=.18?'warn':'fail',
+        '避免切到頭頂或留白過多'
+      );
+    }else{
+      add('coverage','頭頂至下顎比例','無法判斷','fail','未偵測到臉部');
+      add('center','人臉置中','無法判斷','fail','未偵測到臉部');
+      add('tilt','臉部歪斜','無法判斷','fail','未偵測到臉部');
+    }
+
+    const minW=413,minH=531;
+    const resOK=inputCanvas.width>=minW&&inputCanvas.height>=minH;
+    const resWarn=inputCanvas.width>=300&&inputCanvas.height>=386;
+    add(
+      'resolution','解析度',
+      `${inputCanvas.width} × ${inputCanvas.height}`,
+      resOK?'pass':resWarn?'warn':'fail',
+      '2 吋 300dpi 約 413 × 531 px'
+    );
+
+    const sharp=calcSharpnessScore(inputCanvas);
+    add(
+      'sharpness','清晰度',
+      sharp>=115?'良好':sharp>=55?'稍模糊':'偏模糊',
+      sharp>=115?'pass':sharp>=55?'warn':'fail',
+      `清晰度指標 ${Math.round(sharp)}`
+    );
+
+    const bg=analyzeBackgroundStats(inputCanvas);
+    const isTransparent=bg.transparentRatio>.50;
+    add(
+      'background','背景',
+      isTransparent?'透明':`${Math.round(bg.whiteRatio*100)}% 白色`,
+      isTransparent||bg.whiteRatio>=.87?'pass':
+        bg.whiteRatio>=.62?'warn':'fail',
+      isTransparent?'透明背景':'白底比例越高越穩定'
+    );
+
+    const failCount=checks.filter(x=>x.status==='fail').length;
+    const warnCount=checks.filter(x=>x.status==='warn').length;
+    const status=failCount ? 'fail' : warnCount ? 'warn' : 'pass';
+    const score=Math.max(0,100-failCount*18-warnCount*7);
+
+    return {status,score,checks,faces:faces.length,tilt,coverage,centerOffset,background:bg};
+  }
+
+  function renderQualityResult(result){
+    lastQualityResult=result;
+    const summary=$('qualitySummary');
+    const list=$('qualityList');
+    if(!summary||!list) return;
+
+    summary.className=`quality-summary ${result.status}`;
+    summary.textContent=result.status==='pass'
+      ? `✓ 合格｜品質分數 ${result.score}`
+      : result.status==='warn'
+        ? `⚠ 待確認｜品質分數 ${result.score}`
+        : `✕ 需人工處理｜品質分數 ${result.score}`;
+
+    list.innerHTML='';
+    for(const item of result.checks){
+      const row=document.createElement('div');
+      row.className='quality-row';
+      const icon=document.createElement('span');
+      icon.className=`quality-icon ${item.status}`;
+      icon.textContent=item.status==='pass'?'✓':item.status==='warn'?'⚠':'✕';
+      const label=document.createElement('div');
+      label.innerHTML=`<b>${escapeHtml(item.label)}</b><div class="small">${escapeHtml(item.detail||'')}</div>`;
+      const value=document.createElement('div');
+      value.className='quality-value';
+      value.textContent=item.value;
+      row.append(icon,label,value);
+      list.appendChild(row);
+    }
+  }
+
+  function workflowStateFromQuality(result){
+    return result.status==='pass'?'pass':result.status==='warn'?'review':'manual';
+  }
+
+  async function runCurrentQualityCheck(){
+    if(!source.width) return null;
+    showWorkflowToast('正在執行品質檢查…');
+    try{
+      const result=await inspectCanvasQuality(source);
+      renderQualityResult(result);
+      if(editorMode==='batch'&&batchItems[batchIndex]){
+        const item=batchItems[batchIndex];
+        item.quality=result;
+        item.workflowState=workflowStateFromQuality(result);
+        renderBatchList();
+        scheduleSessionSave();
+      }
+      activateToolTab('inspect');
+      return result;
+    }finally{
+      hideWorkflowToast(900);
+    }
+  }
+
+  function showWorkflowToast(text){
+    const el=$('workflowToast');
+    if(!el) return;
+    el.textContent=text;
+    el.hidden=false;
+  }
+
+  function hideWorkflowToast(delay=0){
+    const el=$('workflowToast');
+    if(!el) return;
+    if(delay){
+      setTimeout(()=>{el.hidden=true;},delay);
+    }else{
+      el.hidden=true;
+    }
+  }
+
+  async function applyBackgroundToCanvas(inputCanvas,mode='white',feather=1.2){
+    const result=await runImageSegmentation(inputCanvas);
+    const mask=buildForegroundMaskCanvas(result,inputCanvas.width,inputCanvas.height,feather);
+    const out=document.createElement('canvas');
+    out.width=inputCanvas.width;out.height=inputCanvas.height;
+    const ctx=out.getContext('2d',{willReadFrequently:true});
+    ctx.clearRect(0,0,out.width,out.height);
+    ctx.drawImage(inputCanvas,0,0);
+    ctx.globalCompositeOperation='destination-in';
+    ctx.drawImage(mask,0,0);
+    ctx.globalCompositeOperation='source-over';
+    if(mode==='white'){
+      ctx.globalCompositeOperation='destination-over';
+      ctx.fillStyle='#ffffff';
+      ctx.fillRect(0,0,out.width,out.height);
+      ctx.globalCompositeOperation='source-over';
+    }
+    return out;
+  }
+
+  async function cleanFaceOnCanvas(inputCanvas,level=1){
+    const out=cloneCanvas(inputCanvas);
+    const ctx=out.getContext('2d',{willReadFrequently:true});
+    const analysis=await analyzeFaceBlemishesMediaPipe(out,level);
+    let applied=0;
+    for(const spot of analysis.spots||[]){
+      if(healCanvasAt(out,ctx,spot.x,spot.y,spot.radius,.52)) applied++;
+    }
+    return {canvas:out,applied,faceFound:!!analysis.face};
+  }
+
+  const V13_WORKFLOW_PRESETS={
+    'member-white':{
+      label:'會員卡標準｜白底',
+      straighten:true,crop:true,brighten:true,background:'auto-white',clean:true
+    },
+    'member-keep-bg':{
+      label:'會員卡標準｜保留背景',
+      straighten:true,crop:true,brighten:true,background:null,clean:true
+    },
+    'crop-only':{
+      label:'只做 2 吋裁切',
+      straighten:false,crop:true,brighten:false,background:null,clean:false
+    },
+    'transparent':{
+      label:'會員卡標準｜透明背景',
+      straighten:true,crop:true,brighten:true,background:'transparent',clean:true
+    }
+  };
+
+  async function standardizeCanvasV13(inputCanvas,presetKey='member-white',progress=()=>{}){
+    const preset=V13_WORKFLOW_PRESETS[presetKey] || V13_WORKFLOW_PRESETS['member-white'];
+    let working=cloneCanvas(inputCanvas);
+    let transparent=false;
+    const notes=[];
+
+    if(preset.straighten){
+      progress('分析雙眼位置並自動轉正…');
+      const s=await straightenCanvasMP(working);
+      if(s.changed){
+        working=s.canvas;
+        notes.push(`轉正 ${Math.abs(s.angle).toFixed(1)}°`);
+      }else if(s.reason==='too-large'){
+        notes.push('歪斜角度過大，未自動旋轉');
+      }
+    }
+
+    if(preset.crop){
+      progress('依 2 吋規格建立裁切…');
+      const suggestion=await suggestTaiwanHeadshotCropRectMP(working);
+      if(!suggestion?.reliable){
+        return {success:false,reason:'無法可靠建立 2 吋裁切',canvas:working,notes};
+      }
+      working=cropCanvasBySourceRect(working,suggestion.rect);
+      notes.push(`頭部約 ${Math.round(suggestion.faceCoverage*100)}%`);
+    }
+
+    if(preset.brighten){
+      progress('智慧調整亮度與色彩…');
+      const b=applySmartBrightnessCanvas(working);
+      working=b.canvas;
+      notes.push(`智慧提亮：${b.adjustments.label}`);
+    }
+
+    if(preset.background){
+      const bg=analyzeBackgroundStats(working);
+      const needWhite=preset.background==='auto-white' && bg.whiteRatio<.87;
+      if(preset.background==='transparent'||needWhite){
+        progress(preset.background==='transparent'?'人物去背（透明）…':'背景非純白，正在轉成白底…');
+        working=await applyBackgroundToCanvas(
+          working,
+          preset.background==='transparent'?'transparent':'white',
+          1.2
+        );
+        transparent=preset.background==='transparent';
+        notes.push(transparent?'透明背景':'白色背景');
+      }else if(preset.background==='auto-white'){
+        notes.push('原背景已接近純白，略過去背');
+      }
+    }
+
+    if(preset.clean){
+      progress('保守臉部去污…');
+      const clean=await cleanFaceOnCanvas(working,1);
+      working=clean.canvas;
+      notes.push(`臉部去污 ${clean.applied} 處`);
+    }
+
+    progress('品質檢查…');
+    const quality=await inspectCanvasQuality(working);
+
+    return {
+      success:true,
+      canvas:working,
+      transparent,
+      quality,
+      notes,
+      preset:presetKey
+    };
+  }
+
+  async function runSingleStandardize(){
+    if(!source.width||workflowBusy) return;
+    workflowBusy=true;
+    $('standardizeBtn').disabled=true;
+    $('inspectStandardizeBtn').disabled=true;
+
+    try{
+      const result=await standardizeCanvasV13(source,'member-white',showWorkflowToast);
+      if(!result.success){
+        showWorkflowToast(`標準化停止：${result.reason}`);
+        return;
+      }
+      replaceSourceCanvas(result.canvas,{transparent:result.transparent});
+      resetFilterValues();
+      pushHistory();
+      updateMeta();
+      await renderPreview();
+      renderQualityResult(result.quality);
+      activateToolTab('inspect');
+
+      if(editorMode==='batch'&&batchItems[batchIndex]){
+        const item=batchItems[batchIndex];
+        item.quality=result.quality;
+        item.workflowState=workflowStateFromQuality(result.quality);
+        item.workflowPreset='member-white';
+        item.adjusted=true;
+        renderBatchList();
+      }
+
+      showWorkflowToast(
+        `標準化完成｜${result.notes.join('、')}｜${result.quality.status==='pass'?'合格':result.quality.status==='warn'?'待確認':'需人工'}`
+      );
+      scheduleSessionSave();
+    }catch(err){
+      console.error(err);
+      showWorkflowToast('標準化失敗：'+(err?.message||'未知錯誤'));
+    }finally{
+      workflowBusy=false;
+      setTimeout(()=>{
+        if(source.width){
+          $('standardizeBtn').disabled=false;
+          $('inspectStandardizeBtn').disabled=false;
+        }
+      },500);
+      hideWorkflowToast(5000);
+    }
+  }
+
+  async function runSingleAutoStraighten(){
+    if(!source.width||workflowBusy) return;
+    workflowBusy=true;
+    showWorkflowToast('正在分析雙眼水平線…');
+    try{
+      const result=await straightenCanvasMP(source,{transparent:sourceHasTransparency});
+      if(result.changed){
+        replaceSourceCanvas(result.canvas,{transparent:sourceHasTransparency});
+        pushHistory();
+        touchCurrentBatchItem();
+        updateMeta();
+        await renderPreview();
+        showWorkflowToast(`已自動轉正 ${Math.abs(result.angle).toFixed(1)}°`);
+      }else if(result.reason==='already-straight'){
+        showWorkflowToast(`照片已接近水平（${result.angle.toFixed(1)}°）`);
+      }else if(result.reason==='too-large'){
+        showWorkflowToast(`偵測歪斜 ${result.angle.toFixed(1)}°，角度較大，建議人工確認`);
+      }else{
+        showWorkflowToast('未偵測到可靠臉部，未自動旋轉');
+      }
+    }finally{
+      workflowBusy=false;
+      hideWorkflowToast(2600);
+    }
+  }
+
+  async function blobToCanvasV13(blob){
+    const img=await blobToImage(blob);
+    const c=document.createElement('canvas');
+    c.width=img.naturalWidth;c.height=img.naturalHeight;
+    c.getContext('2d',{willReadFrequently:true}).drawImage(img,0,0);
+    return c;
+  }
+
+  async function runBatchPresetWorkflow(){
+    if(!batchItems.length||batchBusy) return;
+    await saveCurrentBatchItem();
+
+    const presetKey=$('batchWorkflowPreset')?.value || 'member-white';
+    const preset=V13_WORKFLOW_PRESETS[presetKey] || V13_WORKFLOW_PRESETS['member-white'];
+
+    batchBusy=true;
+    updateBatchButtons();
+    let pass=0,review=0,manual=0,failed=0;
+
+    try{
+      for(let i=0;i<batchItems.length;i++){
+        const item=batchItems[i];
+        item.workflowState='processing';
+        renderBatchList();
+
+        showBatchProgress(`${preset.label}：${i+1} / ${batchItems.length}　${item.file.name}`);
+
+        try{
+          let c=await blobToCanvasV13(item.editedBlob||item.file);
+          const result=await standardizeCanvasV13(c,presetKey,()=>{});
+          c=null;
+
+          if(!result.success){
+            item.workflowState='manual';
+            item.quality={status:'fail',score:0,checks:[]};
+            item.workflowNote=result.reason;
+            failed++;
+          }else{
+            const type=result.transparent?'image/png':'image/jpeg';
+            const blob=await canvasToBlob(result.canvas,type,.97);
+            item.editedBlob=blob;
+            item.hasTransparency=result.transparent;
+            item.filters=defaultBatchFilters();
+            item.adjusted=true;
+            item.done=false;
+            item.quality=result.quality;
+            item.workflowState=workflowStateFromQuality(result.quality);
+            item.workflowPreset=presetKey;
+            item.workflowNote=result.notes.join('、');
+
+            if(item.workflowState==='pass') pass++;
+            else if(item.workflowState==='review') review++;
+            else manual++;
+          }
+        }catch(err){
+          console.warn('V13 batch workflow item failed',item.file.name,err);
+          item.workflowState='manual';
+          item.workflowNote=err?.message||'處理失敗';
+          failed++;
+        }
+
+        renderBatchList();
+        await new Promise(r=>setTimeout(r,0));
+      }
+
+      showBatchProgress(
+        `預設流程完成：合格 ${pass}、待確認 ${review}、需人工 ${manual}、處理失敗 ${failed}。`,
+        true
+      );
+
+      if(batchIndex>=0){
+        const reloadIndex=batchIndex;
+        batchIndex=-1;
+        await loadBatchItem(reloadIndex);
+      }
+      scheduleSessionSave();
+    }finally{
+      batchBusy=false;
+      updateBatchButtons();
+    }
+  }
+
+  async function runBatchQualityCheckV13(){
+    if(!batchItems.length||batchBusy) return;
+    await saveCurrentBatchItem();
+    batchBusy=true;
+    updateBatchButtons();
+
+    let pass=0,review=0,manual=0;
+    try{
+      for(let i=0;i<batchItems.length;i++){
+        const item=batchItems[i];
+        item.workflowState='processing';
+        renderBatchList();
+        showBatchProgress(`品質檢查：${i+1} / ${batchItems.length}　${item.file.name}`);
+        try{
+          const c=await blobToCanvasV13(item.editedBlob||item.file);
+          const q=await inspectCanvasQuality(c);
+          item.quality=q;
+          item.workflowState=workflowStateFromQuality(q);
+          if(item.workflowState==='pass') pass++;
+          else if(item.workflowState==='review') review++;
+          else manual++;
+        }catch(err){
+          item.workflowState='manual';
+          manual++;
+        }
+        renderBatchList();
+        await new Promise(r=>setTimeout(r,0));
+      }
+      showBatchProgress(`品質檢查完成：合格 ${pass}、待確認 ${review}、需人工 ${manual}。`,true);
+      scheduleSessionSave();
+    }finally{
+      batchBusy=false;
+      updateBatchButtons();
+    }
+  }
+
+  // ---------------- Background mask refinement ----------------
+  async function startMaskRefinement(){
+    if(!source.width||bgMaskEditing) return;
+    $('maskAnalyzeBtn').disabled=true;
+    $('maskInfo').textContent='正在分析人物遮罩…';
+    try{
+      const result=await runImageSegmentation(source);
+      bgMaskCanvas=buildForegroundMaskCanvas(result,source.width,source.height,1.0);
+      bgMaskBaseCanvas=cloneCanvas(source);
+      bgMaskEditing=true;
+      bgMaskBrushMode='keep';
+      bgMaskCursor=null;
+      app.classList.add('mask-active');
+      $('maskKeepBtn').disabled=false;
+      $('maskRemoveBtn').disabled=false;
+      $('maskApplyBtn').disabled=false;
+      $('maskCancelBtn').disabled=false;
+      $('maskKeepBtn').classList.add('active');
+      $('maskRemoveBtn').classList.remove('active');
+      $('maskBrush').disabled=false;
+      $('maskInfo').textContent='遮罩已顯示。白色半透明區為保留人物，可直接用筆刷補回或移除。';
+      drawOverlay();
+    }catch(err){
+      $('maskInfo').textContent='遮罩分析失敗：'+(err?.message||'未知錯誤');
+    }finally{
+      $('maskAnalyzeBtn').disabled=!source.width;
+    }
+  }
+
+  function paintMaskAt(previewPoint){
+    if(!bgMaskEditing||!bgMaskCanvas) return;
+    const scaleX=bgMaskCanvas.width/preview.width;
+    const scaleY=bgMaskCanvas.height/preview.height;
+    const x=previewPoint.x*scaleX;
+    const y=previewPoint.y*scaleY;
+    const radius=Math.max(3,+$('maskBrush').value*((scaleX+scaleY)/2));
+    const ctx=bgMaskCanvas.getContext('2d');
+    ctx.save();
+    if(bgMaskBrushMode==='remove'){
+      ctx.globalCompositeOperation='destination-out';
+      ctx.fillStyle='rgba(0,0,0,1)';
+    }else{
+      ctx.globalCompositeOperation='source-over';
+      ctx.fillStyle='rgba(255,255,255,1)';
+    }
+    ctx.beginPath();
+    ctx.arc(x,y,radius,0,Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+    drawOverlay();
+  }
+
+  async function applyRefinedMask(){
+    if(!bgMaskEditing||!bgMaskCanvas||!bgMaskBaseCanvas) return;
+    const mode=$('bgOutputMode').value;
+    const out=cloneCanvas(bgMaskBaseCanvas);
+    const ctx=out.getContext('2d',{willReadFrequently:true});
+    ctx.globalCompositeOperation='destination-in';
+    ctx.drawImage(bgMaskCanvas,0,0);
+    ctx.globalCompositeOperation='source-over';
+    if(mode==='white'){
+      ctx.globalCompositeOperation='destination-over';
+      ctx.fillStyle='#ffffff';
+      ctx.fillRect(0,0,out.width,out.height);
+      ctx.globalCompositeOperation='source-over';
+    }
+
+    replaceSourceCanvas(out,{transparent:mode==='transparent'});
+    endMaskRefinement();
+    pushHistory();
+    touchCurrentBatchItem();
+    updateMeta();
+    await renderPreview();
+    $('bgRemoveInfo').textContent=mode==='transparent'
+      ? '遮罩細修已套用，背景為透明。'
+      : '遮罩細修已套用，背景為白色。';
+  }
+
+  function endMaskRefinement(){
+    bgMaskEditing=false;
+    bgMaskDragging=false;
+    bgMaskCanvas=null;
+    bgMaskBaseCanvas=null;
+    bgMaskCursor=null;
+    app.classList.remove('mask-active');
+    $('maskKeepBtn').disabled=true;
+    $('maskRemoveBtn').disabled=true;
+    $('maskApplyBtn').disabled=true;
+    $('maskCancelBtn').disabled=true;
+    $('maskBrush').disabled=true;
+    $('maskKeepBtn').classList.remove('active');
+    $('maskRemoveBtn').classList.remove('active');
+    drawOverlay();
+  }
+
+  // ---------------- Before / After slider ----------------
+  function toggleCompareSlider(){
+    if(!source.width||!compareOriginalImage) return;
+    compareSliderMode=!compareSliderMode;
+    compareSliderDragging=false;
+    compareSliderPosition=.5;
+    $('compareSliderBtn').classList.toggle('active',compareSliderMode);
+    app.classList.toggle('compare-slider-active',compareSliderMode);
+    if(compareSliderMode){
+      cancelCrop();
+      healMode=false;
+      $('healBtn').classList.remove('active');
+      if(bgMaskEditing) endMaskRefinement();
+      $('modeText').textContent='滑動比較：拖曳照片中的分隔線';
+    }else{
+      $('modeText').textContent=editorMode==='batch'
+        ? `批次處理：第 ${batchIndex+1} / ${batchItems.length} 張`
+        : '預覽';
+    }
+    drawOverlay();
+  }
+
+  function drawCompareSliderOverlay(){
+    if(!compareSliderMode||!compareOriginalImage||!overlay.width) return;
+    const temp=document.createElement('canvas');
+    temp.width=overlay.width;temp.height=overlay.height;
+    const t=temp.getContext('2d');
+    drawImageContain(t,compareOriginalImage,temp.width,temp.height);
+
+    const x=Math.round(overlay.width*compareSliderPosition);
+    octx.save();
+    octx.beginPath();
+    octx.rect(0,0,x,overlay.height);
+    octx.clip();
+    octx.drawImage(temp,0,0);
+    octx.restore();
+
+    octx.save();
+    octx.strokeStyle='#2563eb';
+    octx.lineWidth=2;
+    octx.beginPath();
+    octx.moveTo(x,0);
+    octx.lineTo(x,overlay.height);
+    octx.stroke();
+    octx.fillStyle='#2563eb';
+    octx.beginPath();
+    octx.arc(x,overlay.height/2,9,0,Math.PI*2);
+    octx.fill();
+    octx.restore();
+  }
+
+  // ---------------- Background mask overlay ----------------
+  function drawMaskOverlay(){
+    if(!bgMaskEditing||!bgMaskCanvas) return;
+    octx.save();
+    octx.globalAlpha=.28;
+    octx.drawImage(bgMaskCanvas,0,0,overlay.width,overlay.height);
+    octx.restore();
+    if(bgMaskCursor){
+      octx.save();
+      octx.beginPath();
+      octx.arc(bgMaskCursor.x,bgMaskCursor.y,+$('maskBrush').value,0,Math.PI*2);
+      octx.strokeStyle=bgMaskBrushMode==='keep'?'#059669':'#dc2626';
+      octx.lineWidth=2/Math.max(.25,zoomLevel/100);
+      octx.stroke();
+      octx.restore();
+    }
+  }
+
+  // ---------------- Batch names ----------------
+  async function importBatchNames(file){
+    if(!file||!batchItems.length) return;
+    const text=await file.text();
+    let rows=text.split(/\r?\n/)
+      .map(x=>x.trim())
+      .filter(Boolean)
+      .map(line=>{
+        const cols=line.split(',').map(x=>x.trim().replace(/^"|"$/g,''));
+        return cols.length>1 ? (cols[1]||cols[0]) : cols[0];
+      });
+
+    if(rows.length && /^(姓名|name|名稱|檔名)$/i.test(rows[0])) rows.shift();
+
+    for(let i=0;i<batchItems.length&&i<rows.length;i++){
+      batchItems[i].outputName=sanitizeOutputName(rows[i]);
+    }
+    renderBatchList();
+    scheduleSessionSave();
+    showBatchProgress(`已匯入 ${Math.min(rows.length,batchItems.length)} 筆輸出名稱。`,true);
+  }
+
+  // ---------------- IndexedDB session ----------------
+  function openSessionDb(){
+    return new Promise((resolve,reject)=>{
+      const req=indexedDB.open(V13_SESSION_DB,1);
+      req.onupgradeneeded=()=>{
+        const db=req.result;
+        if(!db.objectStoreNames.contains(V13_SESSION_STORE)){
+          db.createObjectStore(V13_SESSION_STORE);
+        }
+      };
+      req.onsuccess=()=>resolve(req.result);
+      req.onerror=()=>reject(req.error);
+    });
+  }
+
+  async function sessionDbPut(value){
+    const db=await openSessionDb();
+    return new Promise((resolve,reject)=>{
+      const tx=db.transaction(V13_SESSION_STORE,'readwrite');
+      tx.objectStore(V13_SESSION_STORE).put(value,V13_SESSION_KEY);
+      tx.oncomplete=()=>{db.close();resolve();};
+      tx.onerror=()=>{db.close();reject(tx.error);};
+    });
+  }
+
+  async function sessionDbGet(){
+    const db=await openSessionDb();
+    return new Promise((resolve,reject)=>{
+      const tx=db.transaction(V13_SESSION_STORE,'readonly');
+      const req=tx.objectStore(V13_SESSION_STORE).get(V13_SESSION_KEY);
+      req.onsuccess=()=>{db.close();resolve(req.result||null);};
+      req.onerror=()=>{db.close();reject(req.error);};
+    });
+  }
+
+  async function sessionDbDelete(){
+    const db=await openSessionDb();
+    return new Promise((resolve,reject)=>{
+      const tx=db.transaction(V13_SESSION_STORE,'readwrite');
+      tx.objectStore(V13_SESSION_STORE).delete(V13_SESSION_KEY);
+      tx.oncomplete=()=>{db.close();resolve();};
+      tx.onerror=()=>{db.close();reject(tx.error);};
+    });
+  }
+
+  async function imageToBlobV13(img,type='image/jpeg'){
+    if(!img?.naturalWidth) return null;
+    const c=document.createElement('canvas');
+    c.width=img.naturalWidth;c.height=img.naturalHeight;
+    c.getContext('2d').drawImage(img,0,0);
+    return await canvasToBlob(c,type,.95);
+  }
+
+  async function buildSessionPayload(){
+    if(editorMode==='batch') await saveCurrentBatchItem();
+
+    const payload={
+      version:13,
+      savedAt:Date.now(),
+      editorMode,
+      batchIndex,
+      batchItems:batchItems.map(item=>({
+        file:item.file,
+        editedBlob:item.editedBlob,
+        filters:item.filters,
+        autoInfo:item.autoInfo,
+        adjusted:item.adjusted,
+        done:item.done,
+        autoCropped:item.autoCropped,
+        hasTransparency:item.hasTransparency,
+        workflowState:item.workflowState,
+        quality:item.quality,
+        outputName:item.outputName,
+        workflowPreset:item.workflowPreset,
+        workflowNote:item.workflowNote
+      }))
+    };
+
+    if(source.width){
+      payload.currentBlob=await canvasToBlob(
+        source,
+        sourceHasTransparency?'image/png':'image/jpeg',
+        .95
+      );
+      payload.currentFilters=getCurrentFilterState();
+      payload.currentName=originalName;
+      payload.currentTransparent=sourceHasTransparency;
+      payload.compareBlob=await imageToBlobV13(compareOriginalImage,'image/jpeg');
+    }
+
+    return payload;
+  }
+
+  async function saveSessionNow(showMessage=false){
+    if(sessionSaveInProgress) return;
+    sessionSaveInProgress=true;
+    try{
+      const payload=await buildSessionPayload();
+      if(!payload.currentBlob&&!payload.batchItems.length) return;
+      await sessionDbPut(payload);
+      if(showMessage) showWorkflowToast('工作階段已儲存在此瀏覽器。');
+      if(showMessage) hideWorkflowToast(1800);
+    }catch(err){
+      console.warn('session save failed',err);
+      if(showMessage){
+        showWorkflowToast('工作階段儲存失敗：'+(err?.message||'未知錯誤'));
+        hideWorkflowToast(2500);
+      }
+    }finally{
+      sessionSaveInProgress=false;
+    }
+  }
+
+  function scheduleSessionSave(){
+    clearTimeout(sessionSaveTimer);
+    sessionSaveTimer=setTimeout(()=>{
+      if(batchBusy || workflowBusy){
+        scheduleSessionSave();
+        return;
+      }
+      saveSessionNow(false);
+    },4000);
+  }
+
+  async function restoreSavedSession(payload){
+    if(!payload) return;
+    sessionRestoreCandidate=null;
+    $('sessionRestoreBar').hidden=true;
+
+    for(const item of batchItems){
+      try{URL.revokeObjectURL(item.thumbUrl);}catch{}
+    }
+    batchItems=[];
+
+    for(const saved of payload.batchItems||[]){
+      if(!saved.file) continue;
+      batchItems.push({
+        ...saved,
+        thumbUrl:URL.createObjectURL(saved.file)
+      });
+    }
+
+    if(payload.editorMode==='batch'&&batchItems.length){
+      editorMode='single';
+      await switchEditorMode('batch');
+      const idx=Math.max(0,Math.min(batchItems.length-1,payload.batchIndex||0));
+      batchIndex=-1;
+      await loadBatchItem(idx);
+    }else if(payload.currentBlob){
+      editorMode='batch';
+      await switchEditorMode('single');
+      const img=await blobToImage(payload.currentBlob);
+      const compareImg=payload.compareBlob
+        ? await blobToImage(payload.compareBlob)
+        : img;
+      originalImage=compareImg;
+      originalName=payload.currentName||'photo';
+      compareOriginalImage=compareImg;
+      source.width=img.naturalWidth;source.height=img.naturalHeight;
+      sctx.clearRect(0,0,source.width,source.height);
+      sctx.drawImage(img,0,0);
+      sourceHasTransparency=!!payload.currentTransparent;
+      setFilterState(payload.currentFilters||defaultBatchFilters());
+      history=[];historyIndex=-1;
+      pushHistory();
+      sourceDirty=false;
+      canvasWrap.hidden=false;
+      empty.hidden=true;
+      setEnabled(true);
+      updateMeta();
+      await renderPreview();
+    }
+
+    renderBatchList();
+    showWorkflowToast('已恢復上次工作階段。');
+    hideWorkflowToast(1800);
+  }
+
+  async function checkSavedSession(){
+    try{
+      const payload=await sessionDbGet();
+      if(!payload?.savedAt) return;
+      const age=Date.now()-payload.savedAt;
+      if(age>14*24*60*60*1000) return;
+      sessionRestoreCandidate=payload;
+      const d=new Date(payload.savedAt);
+      $('sessionRestoreText').textContent=
+        `偵測到上次工作階段（${d.toLocaleString()}），是否繼續？`;
+      $('sessionRestoreBar').hidden=false;
+    }catch(err){
+      console.warn('session check failed',err);
+    }
+  }
+
+  async function clearSavedSession(showMessage=true){
+    try{
+      await sessionDbDelete();
+      sessionRestoreCandidate=null;
+      $('sessionRestoreBar').hidden=true;
+      if(showMessage){
+        showWorkflowToast('已清除瀏覽器中的工作階段。');
+        hideWorkflowToast(1600);
+      }
+    }catch(err){
+      console.warn(err);
+    }
+  }
+
+  // ---------------- AI engine manager ----------------
+  async function releaseSegmenterMemory(){
+    try{
+      if(mpImageSegmenter&&typeof mpImageSegmenter.close==='function'){
+        mpImageSegmenter.close();
+      }
+    }catch{}
+    mpImageSegmenter=null;
+    mpSegmenterPromise=null;
+    if($('engineSegmentStatus')) $('engineSegmentStatus').textContent='按需載入';
+    showWorkflowToast('已釋放去背引擎記憶體；下次去背時會重新載入。');
+    hideWorkflowToast(2000);
+  }
+
   $('singleModeBtn').onclick=()=>switchEditorMode('single');
   $('batchModeBtn').onclick=()=>switchEditorMode('batch');
 
@@ -3864,6 +5138,59 @@
     }
   });
 
+  $('standardizeBtn').onclick=runSingleStandardize;
+  $('inspectStandardizeBtn').onclick=runSingleStandardize;
+  $('autoStraightenBtn').onclick=runSingleAutoStraighten;
+  $('qualityCheckBtn').onclick=runCurrentQualityCheck;
+  $('inspectRunBtn').onclick=runCurrentQualityCheck;
+  $('compareSliderBtn').onclick=toggleCompareSlider;
+
+  $('batchStatusFilter').addEventListener('change',renderBatchList);
+  $('batchWorkflowRunBtn').onclick=runBatchPresetWorkflow;
+  $('batchQualityBtn').onclick=runBatchQualityCheckV13;
+
+  $('batchNamesBtn').onclick=()=>$('batchNamesInput').click();
+  $('batchNamesInput').addEventListener('change',async ev=>{
+    const file=ev.target.files?.[0];
+    if(file) await importBatchNames(file);
+    ev.target.value='';
+  });
+
+  $('batchCurrentName').addEventListener('input',()=>{
+    const item=batchItems[batchIndex];
+    if(!item) return;
+    item.outputName=$('batchCurrentName').value.trim();
+    renderBatchList();
+    scheduleSessionSave();
+  });
+
+  $('maskAnalyzeBtn').onclick=startMaskRefinement;
+  $('maskKeepBtn').onclick=()=>{
+    bgMaskBrushMode='keep';
+    $('maskKeepBtn').classList.add('active');
+    $('maskRemoveBtn').classList.remove('active');
+    $('maskInfo').textContent='筆刷模式：保留人物。';
+  };
+  $('maskRemoveBtn').onclick=()=>{
+    bgMaskBrushMode='remove';
+    $('maskRemoveBtn').classList.add('active');
+    $('maskKeepBtn').classList.remove('active');
+    $('maskInfo').textContent='筆刷模式：移除背景。';
+  };
+  $('maskApplyBtn').onclick=applyRefinedMask;
+  $('maskCancelBtn').onclick=endMaskRefinement;
+  $('maskBrush').addEventListener('input',()=>{
+    $('maskBrushVal').textContent=`${$('maskBrush').value} px`;
+    drawOverlay();
+  });
+
+  $('saveSessionBtn').onclick=()=>saveSessionNow(true);
+  $('clearSessionBtn').onclick=()=>clearSavedSession(true);
+  $('restoreSessionBtn').onclick=()=>restoreSavedSession(sessionRestoreCandidate);
+  $('discardSessionBtn').onclick=()=>clearSavedSession(false);
+
+  $('releaseAiCacheBtn').onclick=releaseSegmenterMemory;
+
   $('batchPrevBtn').onclick=()=>loadBatchItem(batchIndex-1);
   $('batchNextBtn').onclick=()=>loadBatchItem(batchIndex+1);
   $('batchCropBtn').onclick=runBatchAutoHeadshotCropMP;
@@ -3881,6 +5208,7 @@
     item.done=!item.done;
     if(!item.done) item.adjusted=true;
     renderBatchList();
+    scheduleSessionSave();
   };
 
   $('rotateLeftBtn').onclick=()=>rotate(-90);
@@ -3889,6 +5217,8 @@
 
   $('autoHeadshotCropBtn').onclick=async()=>{
     if(!source.width) return;
+    if(compareSliderMode) toggleCompareSlider();
+    if(bgMaskEditing) endMaskRefinement();
 
     $('cropRatio').value='0.7777777778';
     $('modeText').textContent='MediaPipe 正在定位臉部與頭頂…';
@@ -3913,6 +5243,8 @@
 
   $('cropBtn').onclick=()=>{
     if(!source.width) return;
+    if(compareSliderMode) toggleCompareSlider();
+    if(bgMaskEditing) endMaskRefinement();
     smartSpots=[];
     smartFaceRegion=null;
     $('smartApplyBtn').disabled=true;
@@ -3962,6 +5294,24 @@
   });
 
   preview.addEventListener('pointerdown',ev=>{
+    if(compareSliderMode){
+      const p=canvasPoint(ev);
+      compareSliderDragging=true;
+      compareSliderPosition=Math.max(0,Math.min(1,p.x/preview.width));
+      try{preview.setPointerCapture(ev.pointerId);}catch{}
+      drawOverlay();
+      return;
+    }
+
+    if(bgMaskEditing){
+      const p=canvasPoint(ev);
+      bgMaskDragging=true;
+      bgMaskCursor=p;
+      try{preview.setPointerCapture(ev.pointerId);}catch{}
+      paintMaskAt(p);
+      return;
+    }
+
     if(cropMode){
       const p=canvasPoint(ev);
       const hit=getCropHit(p);
@@ -3980,6 +5330,22 @@
   });
   preview.addEventListener('pointermove',ev=>{
     const p=canvasPoint(ev);
+
+    if(compareSliderMode){
+      if(compareSliderDragging){
+        compareSliderPosition=Math.max(0,Math.min(1,p.x/preview.width));
+        drawOverlay();
+      }
+      return;
+    }
+
+    if(bgMaskEditing){
+      bgMaskCursor=p;
+      if(bgMaskDragging) paintMaskAt(p);
+      else drawOverlay();
+      return;
+    }
+
     if(cropMode && dragStart && cropDragMode){
       updateCropDrag(p);
       drawOverlay();
@@ -3993,6 +5359,10 @@
   });
 
   preview.addEventListener('pointerleave',()=>{
+    if(bgMaskEditing){
+      bgMaskCursor=null;
+      drawOverlay();
+    }
     if(cropMode && !dragStart){
       cropHover=null;
       updateCropCursor();
@@ -4003,6 +5373,14 @@
     }
   });
   preview.addEventListener('pointerup',ev=>{
+    if(compareSliderMode){
+      compareSliderDragging=false;
+      return;
+    }
+    if(bgMaskEditing){
+      bgMaskDragging=false;
+      return;
+    }
     if(cropMode && dragStart){
       const p=canvasPoint(ev);
       updateCropDrag(p);
@@ -4230,6 +5608,8 @@
 
   $('healBtn').onclick=()=>{
     if(!source.width) return;
+    if(compareSliderMode) toggleCompareSlider();
+    if(bgMaskEditing) endMaskRefinement();
     smartSpots=[];
     smartFaceRegion=null;
     $('smartApplyBtn').disabled=true;
@@ -4281,6 +5661,8 @@
       item.done=false;
       item.autoCropped=false;
       item.hasTransparency=false;
+      item.workflowState='unprocessed';
+      item.quality=null;
       sourceHasTransparency=false;
       sourceDirty=false;
       await loadBlobIntoEditor(item.file,item.file.name,item.filters,item.autoInfo,item.file);
@@ -4441,6 +5823,11 @@
 
   renderBatchList();
   syncLabels();
+
+  if($('batchStatusFilter')) $('batchStatusFilter').value='all';
+  if($('engineFaceStatus')) $('engineFaceStatus').textContent=mpFaceReady?'已就緒':'載入中';
+  if($('engineSegmentStatus')) $('engineSegmentStatus').textContent=mpImageSegmenter?'已載入':'按需載入';
+  checkSavedSession();
 
   const modelStatusBox=document.getElementById("faceModelStatus");
   if(modelStatusBox){
