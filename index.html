@@ -4,15 +4,15 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <meta name="referrer" content="no-referrer" />
-<title>會員照片快速修圖工具 V12.11</title>
-<link rel="stylesheet" href="./style.css" />
+<title>會員照片快速修圖工具 V12.12</title>
+<link rel="stylesheet" href="./style.css?v=12.12" />
 </head>
 <body>
 <div class="app desktop-app" id="app">
 
   <header class="titlebar">
     <div class="brand-row">
-      <h1>會員照片快速修圖工具 V12.11</h1>
+      <h1>會員照片快速修圖工具 V12.12</h1>
 
       <div class="mode-switch" aria-label="處理模式">
         <button id="singleModeBtn" class="active" type="button">單張修圖</button>
@@ -315,7 +315,7 @@
     <div class="help-dialog-header">
       <div>
         <h2 id="helpTitle">❓ 操作教學</h2>
-        <div class="small">會員照片快速修圖工具 V12.11</div>
+        <div class="small">會員照片快速修圖工具 V12.12</div>
       </div>
       <button id="helpCloseBtn" class="help-close-btn" type="button" aria-label="關閉操作教學">✕</button>
     </div>
@@ -388,6 +388,53 @@
   </section>
 </div>
 
-<script type="module" src="./app.js"></script>
+<script>
+(function(){
+  function byId(id){ return document.getElementById(id); }
+
+  function openHelp(){
+    var modal=byId('helpModal');
+    if(!modal) return;
+    modal.hidden=false;
+    document.body.classList.add('help-open');
+    window.setTimeout(function(){
+      var close=byId('helpCloseBtn');
+      if(close) close.focus();
+    },0);
+  }
+
+  function closeHelp(){
+    var modal=byId('helpModal');
+    if(!modal) return;
+    modal.hidden=true;
+    document.body.classList.remove('help-open');
+    var btn=byId('helpBtn');
+    if(btn) btn.focus();
+  }
+
+  var helpBtn=byId('helpBtn');
+  var closeBtn=byId('helpCloseBtn');
+  var doneBtn=byId('helpDoneBtn');
+  var modal=byId('helpModal');
+
+  if(helpBtn) helpBtn.addEventListener('click',openHelp);
+  if(closeBtn) closeBtn.addEventListener('click',closeHelp);
+  if(doneBtn) doneBtn.addEventListener('click',closeHelp);
+
+  if(modal){
+    var backdrop=modal.querySelector('[data-help-close]');
+    if(backdrop) backdrop.addEventListener('click',closeHelp);
+  }
+
+  document.addEventListener('keydown',function(ev){
+    var m=byId('helpModal');
+    if(ev.key==='Escape' && m && !m.hidden){
+      closeHelp();
+    }
+  });
+})();
+</script>
+
+<script type="module" src="./app.js?v=12.12"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-# 會員照片快速修圖工具 V12.11（GitHub Pages / MediaPipe）
+# 會員照片快速修圖工具 V12.12（GitHub Pages / MediaPipe）
 
 ## 部署方式
 
@@ -198,3 +198,20 @@ V12.8 改成直接三欄 CSS Grid：
 - 建議工作流程
 
 教學視窗可以用右上角 ✕、下方「知道了」、點背景或 Esc 關閉。
+
+
+## V12.12 操作教學按鈕修正
+
+V12.11 的教學內容本來就內建在 `index.html`，不需要額外建立教學網頁。
+
+若 GitHub Pages 更新時只刷新了 `index.html`，但瀏覽器仍沿用舊版 `app.js`，
+可能出現「看得到 ❓ 操作教學按鈕，但點擊沒有反應」。
+
+V12.12 調整：
+- 教學視窗的開啟 / 關閉事件直接由 `index.html` 內的小型獨立程式控制
+- 不再依賴 MediaPipe 或主 `app.js` 是否成功載入
+- `style.css` 改為 `style.css?v=12.12`
+- `app.js` 改為 `app.js?v=12.12`
+- 透過版本參數降低 GitHub Pages / 瀏覽器沿用舊快取的機率
+
+因此只要 V12.12 的 `index.html` 與 `style.css` 有更新，操作教學即可正常開啟。
