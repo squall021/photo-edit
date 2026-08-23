@@ -4442,6 +4442,39 @@
   renderBatchList();
   syncLabels();
 
+  const helpModal=$('helpModal');
+  const helpBtn=$('helpBtn');
+
+  function openHelpModal(){
+    if(!helpModal) return;
+    helpModal.hidden=false;
+    document.body.classList.add('help-open');
+    requestAnimationFrame(()=>{
+      $('helpCloseBtn')?.focus();
+    });
+  }
+
+  function closeHelpModal(){
+    if(!helpModal) return;
+    helpModal.hidden=true;
+    document.body.classList.remove('help-open');
+    helpBtn?.focus();
+  }
+
+  helpBtn?.addEventListener('click',openHelpModal);
+  $('helpCloseBtn')?.addEventListener('click',closeHelpModal);
+  $('helpDoneBtn')?.addEventListener('click',closeHelpModal);
+
+  helpModal?.querySelectorAll('[data-help-close]').forEach(el=>{
+    el.addEventListener('click',closeHelpModal);
+  });
+
+  document.addEventListener('keydown',ev=>{
+    if(ev.key==='Escape' && helpModal && !helpModal.hidden){
+      closeHelpModal();
+    }
+  });
+
   const modelStatusBox=document.getElementById("faceModelStatus");
   if(modelStatusBox){
     modelStatusBox.style.cursor="pointer";

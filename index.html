@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <meta name="referrer" content="no-referrer" />
-<title>會員照片快速修圖工具 V12.10</title>
+<title>會員照片快速修圖工具 V12.11</title>
 <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
@@ -12,12 +12,14 @@
 
   <header class="titlebar">
     <div class="brand-row">
-      <h1>會員照片快速修圖工具 V12.10</h1>
+      <h1>會員照片快速修圖工具 V12.11</h1>
 
       <div class="mode-switch" aria-label="處理模式">
         <button id="singleModeBtn" class="active" type="button">單張修圖</button>
         <button id="batchModeBtn" type="button">批次處理</button>
       </div>
+
+      <button id="helpBtn" class="help-btn" type="button">❓ 操作教學</button>
 
       <div id="faceModelStatus" class="model-status loading" title="MediaPipe Face Landmarker 狀態">
         <span class="model-dot"></span>
@@ -303,6 +305,87 @@
     <span>Ribbon 分頁避免按鈕擠在同一排</span>
     <span>中央照片固定顯示</span>
   </footer>
+</div>
+
+
+<div id="helpModal" class="help-modal" hidden>
+  <div class="help-backdrop" data-help-close></div>
+
+  <section class="help-dialog" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="help-dialog-header">
+      <div>
+        <h2 id="helpTitle">❓ 操作教學</h2>
+        <div class="small">會員照片快速修圖工具 V12.11</div>
+      </div>
+      <button id="helpCloseBtn" class="help-close-btn" type="button" aria-label="關閉操作教學">✕</button>
+    </div>
+
+    <div class="help-dialog-body">
+      <div class="help-step">
+        <div class="help-step-num">1</div>
+        <div>
+          <strong>加入照片</strong>
+          <p>單張修圖按「上傳照片」；大量照片切到「批次」後按「加入多張照片」。</p>
+        </div>
+      </div>
+
+      <div class="help-step">
+        <div class="help-step-num">2</div>
+        <div>
+          <strong>2 吋大頭照裁切</strong>
+          <p>按「2 吋裁切建議」後，系統會依 MediaPipe 人臉定位建立 3.5 × 4.5 公分建議框。確認位置後，直接在照片區按「確認並完成裁切」。</p>
+        </div>
+      </div>
+
+      <div class="help-step">
+        <div class="help-step-num">3</div>
+        <div>
+          <strong>調整亮度與色彩</strong>
+          <p>右側「影像」可調亮度、對比、飽和度與銳化，也可使用「智慧自動提亮」。</p>
+        </div>
+      </div>
+
+      <div class="help-step">
+        <div class="help-step-num">4</div>
+        <div>
+          <strong>智慧去污</strong>
+          <p>切到右側「去污」，可分析臉部斑點／青春痘，或照片灰塵／小型損傷。建議先看橘色標記，再按「套用智慧去污」。</p>
+        </div>
+      </div>
+
+      <div class="help-step">
+        <div class="help-step-num">5</div>
+        <div>
+          <strong>人物去背</strong>
+          <p>右側「去背」可選白色或透明背景。透明背景請使用 PNG 下載。</p>
+        </div>
+      </div>
+
+      <div class="help-step">
+        <div class="help-step-num">6</div>
+        <div>
+          <strong>批次處理</strong>
+          <p>「批次」分頁可一次執行自動 2 吋、智慧提亮、臉部去污，以及白色／透明去背。透明背景照片會以 PNG 放入 ZIP。</p>
+        </div>
+      </div>
+
+      <div class="help-step">
+        <div class="help-step-num">7</div>
+        <div>
+          <strong>檢視與細修</strong>
+          <p>照片上方可直接縮放；也可按住「看修改前」比較差異。細修時可使用手動去污筆。</p>
+        </div>
+      </div>
+
+      <div class="help-tip">
+        建議工作流程：上傳 → 2 吋裁切 → 智慧提亮 → 智慧去污／去背 → 放大檢查 → 匯出。
+      </div>
+    </div>
+
+    <div class="help-dialog-footer">
+      <button id="helpDoneBtn" class="primary" type="button">知道了</button>
+    </div>
+  </section>
 </div>
 
 <script type="module" src="./app.js"></script>
