@@ -302,3 +302,19 @@ canvas{display:block;max-width:none;height:auto;user-select:none;touch-action:no
 @media (max-width:1200px){
   .crop-action-bar > span{display:none}
 }
+
+
+/* V12.6: batch processing group can wrap to two rows instead of shrinking text */
+.ribbon-panel[data-ribbon-panel="batch"] .ribbon-group:nth-child(2) .ribbon-commands{
+  display:grid;
+  grid-template-columns:repeat(3,max-content);
+  grid-auto-rows:34px;
+  align-content:center;
+  column-gap:6px;
+  row-gap:4px;
+}
+.ribbon-panel[data-ribbon-panel="batch"] .ribbon-group:nth-child(2) .ribbon-commands button{
+  min-height:34px;
+  padding-top:4px;
+  padding-bottom:4px;
+}

@@ -818,6 +818,7 @@
 
         if(result.success){
           item.editedBlob=result.blob;
+          item.hasTransparency=false;
           item.adjusted=true;
           item.done=false;
           item.autoCropped=true;
@@ -834,7 +835,7 @@
       }
 
       showBatchProgress(
-        `MediaPipe 全批自動裁切完成：成功 ${success} 張，跳過 ${skipped} 張。`,
+        `MediaPipe 批次自動裁切完成：成功 ${success} 張，跳過 ${skipped} 張。`,
         true
       );
 
@@ -845,7 +846,8 @@
           current.file.name,
           current.filters || defaultBatchFilters(),
           current.autoInfo,
-          current.file
+          current.file,
+          !!current.hasTransparency
         );
         $("cropRatio").value="0.7777777778";
         $("modeText").textContent=`批次處理：第 ${batchIndex+1} / ${batchItems.length} 張`;
@@ -906,6 +908,7 @@
         const result=await processBlobSmartCleanMP(item.editedBlob || item.file,1);
         if(result.faceFound && result.blob){
           item.editedBlob=result.blob;
+          item.hasTransparency=false;
           item.adjusted=true;
           item.done=false;
           totalDetected+=result.detected;
@@ -918,7 +921,7 @@
       }
 
       showBatchProgress(
-        `全批臉部去污完成：修補 ${totalApplied} 個候選斑點；另有 ${faceMissing} 張未辨識到臉部而跳過。`,
+        `批次臉部去污完成：修補 ${totalApplied} 個候選斑點；另有 ${faceMissing} 張未辨識到臉部而跳過。`,
         true
       );
 
@@ -929,7 +932,8 @@
           current.file.name,
           current.filters || defaultBatchFilters(),
           current.autoInfo,
-          current.file
+          current.file,
+          !!current.hasTransparency
         );
         $("modeText").textContent=`批次處理：第 ${batchIndex+1} / ${batchItems.length} 張`;
         renderBatchList();
@@ -1057,6 +1061,8 @@
     $('batchCropBtn').disabled=!has || batchBusy;
     $('batchAutoBtn').disabled=!has || batchBusy;
     $('batchCleanBtn').disabled=!has || batchBusy;
+    $('batchBgWhiteBtn').disabled=!has || batchBusy;
+    $('batchBgTransparentBtn').disabled=!has || batchBusy;
     $('batchDoneBtn').disabled=!active || batchBusy;
     $('batchZipBtn').disabled=!has || batchBusy;
     $('batchClearBtn').disabled=!has || batchBusy;
@@ -1562,7 +1568,7 @@
       }
 
       showBatchProgress(
-        `全批臉部去污完成：共偵測 ${totalDetected} 個臉部候選斑點，已保守修補 ${totalApplied} 個。未找到明確臉部的照片不會亂修，仍建議逐張快速檢查。`,
+        `批次臉部去污完成：共偵測 ${totalDetected} 個臉部候選斑點，已保守修補 ${totalApplied} 個。未找到明確臉部的照片不會亂修，仍建議逐張快速檢查。`,
         true
       );
 
@@ -1586,6 +1592,149 @@
     }
   }
 
+  async function processBlobRemoveBackgroundMP(blob,outputMode="white",featherPx=1.5){
+    const img=await blobToImage(blob);
+    const c=document.createElement("canvas");
+    c.width=img.naturalWidth;
+    c.height=img.naturalHeight;
+    const ctx=c.getContext("2d",{willReadFrequently:true});
+    ctx.clearRect(0,0,c.width,c.height);
+    ctx.drawImage(img,0,0);
+
+    const result=await runImageSegmentation(c);
+    const mask=buildForegroundMaskCanvas(
+      result,
+      c.width,
+      c.height,
+      featherPx
+    );
+
+    const out=document.createElement("canvas");
+    out.width=c.width;
+    out.height=c.height;
+    const o=out.getContext("2d");
+
+    o.clearRect(0,0,out.width,out.height);
+    o.drawImage(c,0,0);
+    o.globalCompositeOperation="destination-in";
+    o.drawImage(mask,0,0);
+    o.globalCompositeOperation="source-over";
+
+    let type="image/png";
+    if(outputMode==="white"){
+      o.globalCompositeOperation="destination-over";
+      o.fillStyle="#ffffff";
+      o.fillRect(0,0,out.width,out.height);
+      o.globalCompositeOperation="source-over";
+      type="image/jpeg";
+    }
+
+    const blobOut=await canvasToBlob(out,type,.97);
+    return blobOut
+      ? {
+          success:true,
+          blob:blobOut,
+          hasTransparency:outputMode==="transparent"
+        }
+      : {
+          success:false,
+          reason:"encode-failed",
+          hasTransparency:false
+        };
+  }
+
+  async function runBatchRemoveBackgroundMP(outputMode="white"){
+    if(!batchItems.length || batchBusy) return;
+    await saveCurrentBatchItem();
+
+    try{
+      await initMediaPipeImageSegmenter();
+    }catch(err){
+      showBatchProgress(
+        "MediaPipe 人物去背模型無法載入，因此未執行批次去背：" +
+        (err?.message || "未知錯誤"),
+        true
+      );
+      return;
+    }
+
+    batchBusy=true;
+    updateBatchButtons();
+
+    let success=0;
+    let skipped=0;
+    const modeText=outputMode==="transparent" ? "透明" : "白色";
+
+    try{
+      for(let i=0;i<batchItems.length;i++){
+        const item=batchItems[i];
+
+        showBatchProgress(
+          `批次去背（${modeText}）：${i+1} / ${batchItems.length}　${item.file.name}`
+        );
+
+        try{
+          const result=await processBlobRemoveBackgroundMP(
+            item.editedBlob || item.file,
+            outputMode,
+            1.5
+          );
+
+          if(result.success && result.blob){
+            item.editedBlob=result.blob;
+            item.hasTransparency=!!result.hasTransparency;
+            item.adjusted=true;
+            item.done=false;
+            item.bgInfo=`批次去背（${modeText}）`;
+            success++;
+          }else{
+            item.bgInfo=`批次去背（${modeText}）失敗`;
+            skipped++;
+          }
+        }catch(itemError){
+          console.warn("單張批次去背失敗",item.file.name,itemError);
+          item.bgInfo=`批次去背（${modeText}）跳過`;
+          skipped++;
+        }
+
+        renderBatchList();
+        await new Promise(r=>setTimeout(r,0));
+      }
+
+      showBatchProgress(
+        `批次去背（${modeText}）完成：成功 ${success} 張，跳過 ${skipped} 張。` +
+        (outputMode==="transparent"
+          ? " 透明照片下載 ZIP 時會以 PNG 輸出。"
+          : ""),
+        true
+      );
+
+      if(batchIndex>=0){
+        const current=batchItems[batchIndex];
+        await loadBlobIntoEditor(
+          current.editedBlob || current.file,
+          current.file.name,
+          current.filters || defaultBatchFilters(),
+          current.autoInfo,
+          current.file,
+          !!current.hasTransparency
+        );
+        $('modeText').textContent=
+          `批次處理：第 ${batchIndex+1} / ${batchItems.length} 張`;
+        renderBatchList();
+      }
+    }catch(err){
+      showBatchProgress(
+        `批次去背（${modeText}）發生錯誤：` +
+        (err?.message || "未知錯誤"),
+        true
+      );
+    }finally{
+      batchBusy=false;
+      updateBatchButtons();
+    }
+  }
+
   function snapshotOutputSettings(){
     return {
       preset:$('presetSize').value,
@@ -1602,6 +1751,7 @@
     srcC.width=img.naturalWidth;
     srcC.height=img.naturalHeight;
     const srcCtx=srcC.getContext('2d',{willReadFrequently:true});
+    srcCtx.clearRect(0,0,srcC.width,srcC.height);
     srcCtx.drawImage(img,0,0);
 
     let outW=srcC.width, outH=srcC.height;
@@ -1610,12 +1760,16 @@
       outH=Math.max(1,settings.outH || srcC.height);
     }
 
+    const transparent=!!item.hasTransparency;
+    const outputType=transparent ? 'image/png' : 'image/jpeg';
+
     const base=document.createElement('canvas');
     base.width=outW;
     base.height=outH;
     const b=base.getContext('2d',{willReadFrequently:true});
     const f=item.filters || defaultBatchFilters();
 
+    b.clearRect(0,0,outW,outH);
     b.filter=`brightness(${f.brightness}%) contrast(${f.contrast}%) saturate(${f.saturation}%)`;
 
     if(settings.keepRatio && settings.preset!=='original'){
@@ -1624,8 +1778,12 @@
       const dh=Math.round(srcC.height*scale);
       const dx=Math.round((outW-dw)/2);
       const dy=Math.round((outH-dh)/2);
-      b.fillStyle='#ffffff';
-      b.fillRect(0,0,outW,outH);
+
+      if(!transparent){
+        b.fillStyle='#ffffff';
+        b.fillRect(0,0,outW,outH);
+      }
+
       b.drawImage(srcC,dx,dy,dw,dh);
     }else{
       b.drawImage(srcC,0,0,outW,outH);
@@ -1638,7 +1796,12 @@
       b.putImageData(data,0,0);
     }
 
-    return await canvasToBlob(base,'image/jpeg',settings.quality);
+    const blob=await canvasToBlob(base,outputType,settings.quality);
+    return {
+      blob,
+      extension:transparent ? 'png' : 'jpg',
+      transparent
+    };
   }
 
   const crcTable=(()=>{
@@ -1755,17 +1918,23 @@
     try{
       for(let i=0;i<batchItems.length;i++){
         const item=batchItems[i];
-        showBatchProgress(`輸出 JPG：${i+1} / ${batchItems.length}　${item.file.name}`);
-        const blob=await renderBatchItemBlob(item,settings);
-        if(!blob) throw new Error('JPG 產生失敗');
+        const output=await renderBatchItemBlob(item,settings);
+        if(!output?.blob) throw new Error('批次照片產生失敗');
+
+        showBatchProgress(
+          `輸出 ${output.extension.toUpperCase()}：${i+1} / ${batchItems.length}　${item.file.name}`
+        );
 
         let base=cleanZipBaseName(item.file.name) + '_edited';
         const count=(used.get(base)||0)+1;
         used.set(base,count);
         if(count>1) base += '_' + count;
 
-        const bytes=new Uint8Array(await blob.arrayBuffer());
-        zipFiles.push({name:base+'.jpg',bytes});
+        const bytes=new Uint8Array(await output.blob.arrayBuffer());
+        zipFiles.push({
+          name:base+'.'+output.extension,
+          bytes
+        });
       }
 
       showBatchProgress('正在建立 ZIP 檔案…');
@@ -1782,7 +1951,7 @@
         a.remove();
       },1500);
 
-      showBatchProgress(`已完成 ${batchItems.length} 張 JPG 並建立 ZIP。`,true);
+      showBatchProgress(`已完成 ${batchItems.length} 張照片並建立 ZIP；透明背景照片以 PNG 輸出。`,true);
     }catch(err){
       showBatchProgress('批次匯出發生錯誤：' + err.message,true);
     }finally{
@@ -3700,6 +3869,8 @@
   $('batchCropBtn').onclick=runBatchAutoHeadshotCropMP;
   $('batchAutoBtn').onclick=runBatchSmartBright;
   $('batchCleanBtn').onclick=runBatchSmartCleanMP;
+  $('batchBgWhiteBtn').onclick=()=>runBatchRemoveBackgroundMP('white');
+  $('batchBgTransparentBtn').onclick=()=>runBatchRemoveBackgroundMP('transparent');
   $('batchZipBtn').onclick=exportBatchZip;
   $('batchClearBtn').onclick=clearBatchItems;
 
