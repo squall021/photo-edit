@@ -4380,6 +4380,14 @@
     document.querySelectorAll('.ribbon-panel').forEach(panel=>{
       panel.classList.toggle('active',panel.dataset.ribbonPanel===name);
     });
+
+    app.classList.toggle('batch-ribbon-expanded',name==='batch');
+
+    requestAnimationFrame(()=>{
+      if(source.width && zoomMode==='fit'){
+        fitZoomToStage();
+      }
+    });
   }
 
   document.querySelectorAll('.ribbon-tab').forEach(btn=>{
