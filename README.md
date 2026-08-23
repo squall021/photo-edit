@@ -1,4 +1,4 @@
-# 會員照片標準化工作站 V13（GitHub Pages / MediaPipe）
+# 會員照片標準化工作站 V13.1（GitHub Pages / MediaPipe）
 
 ## 部署方式
 
@@ -230,3 +230,42 @@ V13 將工具由「單純修圖」升級成會員照片的標準化工作流程�
 8. IndexedDB 自動儲存 / 恢復工作階段
 9. Before / After 滑動比較
 10. AI 引擎狀態、按需載入與記憶體釋放
+
+
+## V13.1 獨立操作教學網頁
+
+新增 `help.html`，與 `index.html` 放在同一個 GitHub Pages 專案根目錄。
+
+目錄結構：
+
+```text
+/
+├─ index.html
+├─ help.html
+├─ style.css
+├─ app.js
+├─ .nojekyll
+└─ README.md
+```
+
+圖片編輯器右上角的「❓ 操作教學」已改成：
+
+```html
+<a href="./help.html?v=13.1"
+   target="_blank"
+   rel="noopener noreferrer"
+   class="help-btn">
+  ❓ 操作教學
+</a>
+```
+
+使用者點擊後會在新的瀏覽器分頁 / 視窗開啟 V13 操作教學。
+不需要另外建立第二個 GitHub repository。
+
+若 GitHub Pages 網址為：
+
+`https://帳號.github.io/專案名稱/`
+
+則：
+- 圖片編輯器：`https://帳號.github.io/專案名稱/`
+- 操作教學：`https://帳號.github.io/專案名稱/help.html`

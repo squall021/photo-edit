@@ -734,3 +734,18 @@ canvas{display:block;max-width:none;height:auto;user-select:none;touch-action:no
     padding-right:7px;
   }
 }
+
+
+/* V13.1 — operation guide is now a standalone GitHub Pages page */
+a.help-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  text-decoration:none;
+  color:inherit;
+  box-sizing:border-box;
+}
+
+a.help-btn:hover{
+  text-decoration:none;
+}

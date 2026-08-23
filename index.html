@@ -4,8 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <meta name="referrer" content="no-referrer" />
-<title>會員照片標準化工作站 V13</title>
-<link rel="stylesheet" href="./style.css?v=13.0" />
+<title>會員照片標準化工作站 V13.1</title>
+<link rel="stylesheet" href="./style.css?v=13.1" />
 </head>
 <body>
 <div class="app desktop-app" id="app">
@@ -19,7 +19,7 @@
         <button id="batchModeBtn" type="button">批次處理</button>
       </div>
 
-      <button id="helpBtn" class="help-btn" type="button">❓ 操作教學</button>
+      <a id="helpBtn" class="help-btn" href="./help.html?v=13.1" target="_blank" rel="noopener noreferrer">❓ 操作教學</a>
 
       <div id="faceModelStatus" class="model-status loading" title="MediaPipe Face Landmarker 狀態">
         <span class="model-dot"></span>
@@ -436,133 +436,8 @@
 </div>
 
 
-<div id="helpModal" class="help-modal" hidden>
-  <div class="help-backdrop" data-help-close></div>
 
-  <section class="help-dialog" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
-    <div class="help-dialog-header">
-      <div>
-        <h2 id="helpTitle">❓ 操作教學</h2>
-        <div class="small">會員照片標準化工作站 V13</div>
-      </div>
-      <button id="helpCloseBtn" class="help-close-btn" type="button" aria-label="關閉操作教學">✕</button>
-    </div>
 
-    <div class="help-dialog-body">
-      <div class="help-step">
-        <div class="help-step-num">1</div>
-        <div>
-          <strong>加入照片</strong>
-          <p>單張修圖按「上傳照片」；大量照片切到「批次」後按「加入多張照片」。</p>
-        </div>
-      </div>
-
-      <div class="help-step">
-        <div class="help-step-num">2</div>
-        <div>
-          <strong>2 吋大頭照裁切</strong>
-          <p>按「2 吋裁切建議」後，系統會依 MediaPipe 人臉定位建立 3.5 × 4.5 公分建議框。確認位置後，直接在照片區按「確認並完成裁切」。</p>
-        </div>
-      </div>
-
-      <div class="help-step">
-        <div class="help-step-num">3</div>
-        <div>
-          <strong>調整亮度與色彩</strong>
-          <p>右側「影像」可調亮度、對比、飽和度與銳化，也可使用「智慧自動提亮」。</p>
-        </div>
-      </div>
-
-      <div class="help-step">
-        <div class="help-step-num">4</div>
-        <div>
-          <strong>智慧去污</strong>
-          <p>切到右側「去污」，可分析臉部斑點／青春痘，或照片灰塵／小型損傷。建議先看橘色標記，再按「套用智慧去污」。</p>
-        </div>
-      </div>
-
-      <div class="help-step">
-        <div class="help-step-num">5</div>
-        <div>
-          <strong>人物去背</strong>
-          <p>右側「去背」可選白色或透明背景。透明背景請使用 PNG 下載。</p>
-        </div>
-      </div>
-
-      <div class="help-step">
-        <div class="help-step-num">6</div>
-        <div>
-          <strong>批次處理</strong>
-          <p>「批次」分頁可一次執行自動 2 吋、智慧提亮、臉部去污，以及白色／透明去背。透明背景照片會以 PNG 放入 ZIP。</p>
-        </div>
-      </div>
-
-      <div class="help-step">
-        <div class="help-step-num">7</div>
-        <div>
-          <strong>檢視與細修</strong>
-          <p>照片上方可直接縮放；也可按住「看修改前」比較差異。細修時可使用手動去污筆。</p>
-        </div>
-      </div>
-
-      <div class="help-tip">
-        V13 建議工作流程：上傳 →「✨ 一鍵標準化」→ 品質檢查 → 只處理「待確認／需人工」照片 → 匯出。
-      </div>
-    </div>
-
-    <div class="help-dialog-footer">
-      <button id="helpDoneBtn" class="primary" type="button">知道了</button>
-    </div>
-  </section>
-</div>
-
-<script>
-(function(){
-  function byId(id){ return document.getElementById(id); }
-
-  function openHelp(){
-    var modal=byId('helpModal');
-    if(!modal) return;
-    modal.hidden=false;
-    document.body.classList.add('help-open');
-    window.setTimeout(function(){
-      var close=byId('helpCloseBtn');
-      if(close) close.focus();
-    },0);
-  }
-
-  function closeHelp(){
-    var modal=byId('helpModal');
-    if(!modal) return;
-    modal.hidden=true;
-    document.body.classList.remove('help-open');
-    var btn=byId('helpBtn');
-    if(btn) btn.focus();
-  }
-
-  var helpBtn=byId('helpBtn');
-  var closeBtn=byId('helpCloseBtn');
-  var doneBtn=byId('helpDoneBtn');
-  var modal=byId('helpModal');
-
-  if(helpBtn) helpBtn.addEventListener('click',openHelp);
-  if(closeBtn) closeBtn.addEventListener('click',closeHelp);
-  if(doneBtn) doneBtn.addEventListener('click',closeHelp);
-
-  if(modal){
-    var backdrop=modal.querySelector('[data-help-close]');
-    if(backdrop) backdrop.addEventListener('click',closeHelp);
-  }
-
-  document.addEventListener('keydown',function(ev){
-    var m=byId('helpModal');
-    if(ev.key==='Escape' && m && !m.hidden){
-      closeHelp();
-    }
-  });
-})();
-</script>
-
-<script type="module" src="./app.js?v=13.0"></script>
+<script type="module" src="./app.js?v=13.1"></script>
 </body>
 </html>

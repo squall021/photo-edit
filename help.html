@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>會員照片標準化工作站 V13｜操作教學</title>
+<style>
+:root{
+  --bg:#f3f6fb;
+  --panel:#ffffff;
+  --line:#dce3ec;
+  --text:#172033;
+  --muted:#64748b;
+  --blue:#2563eb;
+  --blue2:#1d4ed8;
+  --green:#059669;
+  --amber:#d97706;
+  --red:#dc2626;
+  --navw:260px;
+  --radius:14px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  color:var(--text);
+  background:var(--bg);
+  font-family:"Segoe UI","Microsoft JhengHei","Noto Sans TC",Arial,sans-serif;
+  line-height:1.65;
+}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+.topbar{
+  position:sticky;
+  top:0;
+  z-index:30;
+  display:flex;
+  align-items:center;
+  gap:16px;
+  min-height:64px;
+  padding:10px 22px;
+  border-bottom:1px solid var(--line);
+  background:rgba(255,255,255,.96);
+  backdrop-filter:blur(8px);
+}
+.brand{min-width:0}
+.brand strong{display:block;font-size:18px}
+.brand span{display:block;color:var(--muted);font-size:12px}
+.top-actions{
+  margin-left:auto;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:38px;
+  padding:7px 12px;
+  border:1px solid #cbd5e1;
+  border-radius:9px;
+  background:#fff;
+  color:var(--text);
+  font-weight:700;
+  font-size:13px;
+  text-decoration:none;
+  white-space:nowrap;
+}
+.btn:hover{background:#f8fafc;text-decoration:none}
+.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.layout{
+  display:grid;
+  grid-template-columns:var(--navw) minmax(0,1fr);
+  min-height:calc(100vh - 64px);
+}
+.sidebar{
+  position:sticky;
+  top:64px;
+  align-self:start;
+  height:calc(100vh - 64px);
+  overflow:auto;
+  padding:18px 14px 28px;
+  border-right:1px solid var(--line);
+  background:#fff;
+}
+.nav-title{
+  margin:0 8px 8px;
+  color:var(--muted);
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.08em;
+}
+.sidebar a{
+  display:block;
+  margin:2px 0;
+  padding:8px 10px;
+  border-radius:8px;
+  color:#334155;
+  font-size:13px;
+  font-weight:650;
+}
+.sidebar a:hover{
+  background:#eff6ff;
+  color:var(--blue2);
+  text-decoration:none;
+}
+main{
+  width:min(1120px,calc(100% - 40px));
+  margin:0 auto;
+  padding:28px 0 64px;
+}
+.hero{
+  padding:26px 28px;
+  border:1px solid #bfdbfe;
+  border-radius:18px;
+  background:linear-gradient(135deg,#eff6ff,#ffffff 60%);
+  box-shadow:0 10px 28px rgba(15,23,42,.05);
+}
+.hero h1{margin:0 0 8px;font-size:30px;line-height:1.2}
+.hero p{margin:0;color:#475569}
+.hero-flow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+  margin-top:18px;
+}
+.flow{
+  padding:7px 10px;
+  border:1px solid #bfdbfe;
+  border-radius:999px;
+  background:#fff;
+  color:#1e40af;
+  font-size:12px;
+  font-weight:750;
+}
+.section{
+  scroll-margin-top:82px;
+  margin-top:22px;
+  padding:22px 24px;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:var(--panel);
+}
+.section h2{margin:0 0 14px;font-size:21px}
+.section h3{margin:20px 0 8px;font-size:16px}
+.section p{margin:7px 0;color:#475569}
+.section ul,.section ol{margin:8px 0 0;padding-left:22px}
+.section li{margin:5px 0}
+.grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+}
+.card{
+  padding:15px;
+  border:1px solid #e2e8f0;
+  border-radius:11px;
+  background:#fff;
+}
+.card strong{display:block;margin-bottom:4px}
+.card p{margin:0;font-size:13px}
+.callout{
+  margin-top:14px;
+  padding:12px 14px;
+  border-radius:10px;
+  border:1px solid #bfdbfe;
+  background:#eff6ff;
+  color:#1e3a8a;
+  font-size:13px;
+}
+.callout.green{border-color:#bbf7d0;background:#f0fdf4;color:#166534}
+.callout.amber{border-color:#fde68a;background:#fffbeb;color:#92400e}
+.table-wrap{overflow:auto}
+table{
+  width:100%;
+  border-collapse:collapse;
+  margin-top:10px;
+  font-size:13px;
+}
+th,td{
+  padding:9px 10px;
+  border:1px solid #e2e8f0;
+  text-align:left;
+  vertical-align:top;
+}
+th{background:#f8fafc}
+.badge{
+  display:inline-block;
+  padding:2px 7px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:800;
+}
+.badge.pass{background:#ecfdf5;color:#047857}
+.badge.warn{background:#fffbeb;color:#b45309}
+.badge.fail{background:#fef2f2;color:#b91c1c}
+.code{
+  display:inline-block;
+  padding:1px 6px;
+  border-radius:6px;
+  background:#f1f5f9;
+  color:#0f172a;
+  font-family:Consolas,monospace;
+  font-size:.92em;
+}
+.steps{
+  counter-reset:step;
+  display:grid;
+  gap:10px;
+}
+.step{
+  display:grid;
+  grid-template-columns:38px minmax(0,1fr);
+  gap:11px;
+  align-items:start;
+  padding:12px;
+  border:1px solid #e2e8f0;
+  border-radius:10px;
+}
+.step:before{
+  counter-increment:step;
+  content:counter(step);
+  width:34px;height:34px;
+  display:grid;place-items:center;
+  border-radius:999px;
+  background:#eff6ff;
+  color:#1d4ed8;
+  font-weight:900;
+}
+.step strong{display:block;margin-top:2px}
+.small{color:var(--muted);font-size:12px}
+.footer{
+  margin-top:26px;
+  padding:18px 0;
+  color:var(--muted);
+  text-align:center;
+  font-size:12px;
+}
+@media(max-width:900px){
+  .layout{grid-template-columns:1fr}
+  .sidebar{display:none}
+  main{width:min(100% - 24px,1120px);padding-top:16px}
+  .grid{grid-template-columns:1fr}
+  .hero h1{font-size:24px}
+}
+@media(max-width:620px){
+  .topbar{padding:9px 12px}
+  .brand span{display:none}
+  .top-actions .secondary{display:none}
+  .section,.hero{padding:17px}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <strong>會員照片標準化工作站 V13</strong>
+    <span>操作教學與批次處理說明</span>
+  </div>
+  <div class="top-actions">
+    <a class="btn secondary" href="#quick-start">快速開始</a>
+    <a class="btn primary" href="./index.html">返回圖片編輯器</a>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="sidebar">
+    <div class="nav-title">操作教學</div>
+    <a href="#overview">功能總覽</a>
+    <a href="#quick-start">快速開始</a>
+    <a href="#interface">介面說明</a>
+    <a href="#standardize">一鍵標準化</a>
+    <a href="#quality">品質檢查</a>
+    <a href="#straighten">自動轉正</a>
+    <a href="#cleanup">智慧去污</a>
+    <a href="#background">人物去背與遮罩細修</a>
+    <a href="#crop">裁切功能</a>
+    <a href="#batch">批次工作流程</a>
+    <a href="#filename">批次檔名</a>
+    <a href="#session">工作階段儲存</a>
+    <a href="#compare">修改前／後比較</a>
+    <a href="#export">輸出與 ZIP</a>
+    <a href="#ai">AI 引擎</a>
+    <a href="#faq">常見問題</a>
+  </nav>
+
+  <main>
+    <section class="hero" id="overview">
+      <h1>會員照片標準化工作站 V13</h1>
+      <p>
+        V13 的核心不是單純修圖，而是把會員照片依固定流程自動標準化，
+        再透過品質檢查找出真正需要人工確認的照片。
+      </p>
+      <div class="hero-flow">
+        <span class="flow">加入照片</span>
+        <span class="flow">自動轉正</span>
+        <span class="flow">2 吋裁切</span>
+        <span class="flow">智慧提亮</span>
+        <span class="flow">去污／去背</span>
+        <span class="flow">品質檢查</span>
+        <span class="flow">人工確認</span>
+        <span class="flow">輸出</span>
+      </div>
+    </section>
+
+    <section class="section" id="quick-start">
+      <h2>快速開始</h2>
+      <div class="steps">
+        <div class="step">
+          <div><strong>加入照片</strong><p>單張處理按「上傳照片」；大量照片切到上方「批次」分頁後，按「加入多張照片」。</p></div>
+        </div>
+        <div class="step">
+          <div><strong>先用「✨ 一鍵標準化」</strong><p>系統會依序處理方向、2 吋裁切、亮度、背景與保守去污，最後自動執行品質檢查。</p></div>
+        </div>
+        <div class="step">
+          <div><strong>檢查品質結果</strong><p>綠色「合格」通常可直接使用；黃色「待確認」及紅色「需人工」再進行人工修正。</p></div>
+        </div>
+        <div class="step">
+          <div><strong>需要時再細修</strong><p>可使用智慧去污、手動去污筆、人物去背、遮罩細修、手動裁切與影像參數。</p></div>
+        </div>
+        <div class="step">
+          <div><strong>匯出照片</strong><p>一般白底會員照使用 JPG；透明背景請使用 PNG。批次照片可一次下載 ZIP。</p></div>
+        </div>
+      </div>
+      <div class="callout green">
+        建議：大量處理時，不需要每一張都逐張檢查。先跑批次標準化與品質檢查，再只看「待確認／需人工」照片。
+      </div>
+    </section>
+
+    <section class="section" id="interface">
+      <h2>介面說明</h2>
+      <div class="grid">
+        <div class="card">
+          <strong>上方 Ribbon</strong>
+          <p>「常用」放單張主要工具；「批次」集中大量處理；「檢視」管理左右欄與工作階段。</p>
+        </div>
+        <div class="card">
+          <strong>左側照片欄</strong>
+          <p>單張模式顯示照片資訊；批次模式顯示照片清單及處理狀態。</p>
+        </div>
+        <div class="card">
+          <strong>中央照片工作區</strong>
+          <p>照片預覽、縮放、裁切、去污筆、遮罩細修及滑動比較都在中央操作。</p>
+        </div>
+        <div class="card">
+          <strong>右側工具欄</strong>
+          <p>影像、去污、去背、裁切、檢查及匯出等詳細設定。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="standardize">
+      <h2>✨ 一鍵會員照標準化</h2>
+      <p>這是 V13 最主要的功能。按一次後，系統會自動執行一整套會員照片處理流程。</p>
+      <ol>
+        <li>以 MediaPipe 人臉 Landmark 分析左右眼並自動轉正。</li>
+        <li>建立台灣 2 吋大頭照 3.5 × 4.5 比例裁切。</li>
+        <li>調整頭頂至下顎約占照片高度 70%～80%。</li>
+        <li>智慧分析亮度、對比、飽和度與銳化。</li>
+        <li>檢查背景；會員卡白底模式下，必要時才執行人物去背。</li>
+        <li>進行保守的臉部斑點／瑕疵清理。</li>
+        <li>完成後執行 V13 品質檢查。</li>
+      </ol>
+      <div class="callout amber">
+        系統刻意採保守原則：寧可留下少量瑕疵，也不要誤修眼睛、鼻子、嘴巴、髮際線等重要結構。
+      </div>
+    </section>
+
+    <section class="section" id="quality">
+      <h2>✓ 照片品質檢查</h2>
+      <p>品質檢查的目的不是只給分數，而是幫你快速判斷哪些照片可以直接使用、哪些需要人工確認。</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>檢查項目</th><th>內容</th><th>結果</th></tr></thead>
+          <tbody>
+            <tr><td>2 吋比例</td><td>確認是否接近 3.5 : 4.5</td><td><span class="badge pass">合格</span> / 警告</td></tr>
+            <tr><td>人臉數量</td><td>會員照原則上只應有一張臉</td><td>1 人最佳</td></tr>
+            <tr><td>頭部比例</td><td>頭頂至下顎占照片高度</td><td>目標 70%～80%</td></tr>
+            <tr><td>人臉置中</td><td>檢查臉部水平偏移</td><td>越接近中央越佳</td></tr>
+            <tr><td>臉部歪斜</td><td>以雙眼 Landmark 判斷</td><td>±2° 內最佳</td></tr>
+            <tr><td>頭頂留白</td><td>避免切到頭頂或留白太多</td><td>依照片自動判斷</td></tr>
+            <tr><td>解析度</td><td>2 吋 300dpi 約需 413 × 531 px</td><td>不足會警告</td></tr>
+            <tr><td>清晰度</td><td>分析影像邊緣／細節</td><td>良好 / 稍模糊 / 偏模糊</td></tr>
+            <tr><td>背景</td><td>檢查白底比例或透明背景</td><td>白底／透明可直接通過</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>品質狀態</h3>
+      <p><span class="badge pass">✓ 合格</span>：通常可直接輸出。</p>
+      <p><span class="badge warn">⚠ 待確認</span>：建議人工看一下，但不一定需要修改。</p>
+      <p><span class="badge fail">✕ 需人工</span>：有明顯問題，例如無法偵測人臉、比例不符或過度模糊。</p>
+    </section>
+
+    <section class="section" id="straighten">
+      <h2>↔ 自動轉正</h2>
+      <p>
+        V13 會利用左右眼 Landmark 計算照片的傾斜角度。小角度歪斜可自動修正，
+        比只提供 90° 左右旋轉更適合證件照。
+      </p>
+      <div class="callout">
+        若偵測到的角度太大，系統不會強行旋轉，而會提示人工確認，以避免錯誤判斷。
+      </div>
+    </section>
+
+    <section class="section" id="cleanup">
+      <h2>智慧去污</h2>
+      <h3>臉部斑點／青春痘</h3>
+      <p>使用 MediaPipe 人臉範圍與眼睛、眉毛、鼻子、嘴唇等保護區，盡量只處理安全的皮膚區域。</p>
+      <h3>照片灰塵／小型損傷</h3>
+      <p>使用「孤立斑點＋邊緣保護」分析，降低把髮絲、臉部輪廓或衣服邊界誤判成灰塵的情形。</p>
+      <h3>手動去污筆</h3>
+      <p>需要更精細處理時，可以放大照片後使用手動去污筆局部修補。</p>
+    </section>
+
+    <section class="section" id="background">
+      <h2>人物去背與遮罩細修</h2>
+      <p>右側「去背」可選擇白色背景或透明背景。</p>
+      <div class="grid">
+        <div class="card">
+          <strong>白色背景</strong>
+          <p>適合會員證、證件照與一般 JPG 輸出。</p>
+        </div>
+        <div class="card">
+          <strong>透明背景</strong>
+          <p>保留 Alpha 透明資訊，請使用 PNG 下載。</p>
+        </div>
+      </div>
+      <h3>遮罩細修</h3>
+      <p>如果 AI 去背吃掉頭髮、耳朵或肩膀，可按「分析並顯示遮罩」後使用：</p>
+      <ul>
+        <li><strong>＋ 保留人物</strong>：把被錯誤刪除的區域補回。</li>
+        <li><strong>－ 移除背景</strong>：把殘留背景擦除。</li>
+        <li><strong>遮罩筆刷</strong>：可依細節大小調整筆刷。</li>
+      </ul>
+    </section>
+
+    <section class="section" id="crop">
+      <h2>裁切功能</h2>
+      <p>支援手動裁切及自動 2 吋裁切建議。</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>比例</th><th>用途</th></tr></thead>
+          <tbody>
+            <tr><td>3.5 : 4.5</td><td>台灣 2 吋大頭照</td></tr>
+            <tr><td>9 : 16</td><td>直式社群／手機畫面</td></tr>
+            <tr><td>4 : 5</td><td>一般直式照片</td></tr>
+            <tr><td>其他</td><td>依工具選單提供的比例使用</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>進入裁切後，「確認並完成裁切」會浮在照片工作區上方，不會推動照片位置。</p>
+    </section>
+
+    <section class="section" id="batch">
+      <h2>批次工作流程</h2>
+      <p>大量照片建議直接使用批次模式，而不是逐張重複按每一個工具。</p>
+      <h3>批次 Preset</h3>
+      <div class="grid">
+        <div class="card"><strong>會員卡標準｜白底</strong><p>轉正 → 2 吋裁切 → 提亮 → 必要時白底 → 去污 → 品質檢查。</p></div>
+        <div class="card"><strong>會員卡標準｜保留背景</strong><p>保留原背景，其餘依會員照流程處理。</p></div>
+        <div class="card"><strong>只做 2 吋裁切</strong><p>只執行自動裁切，不變更亮度、背景與臉部。</p></div>
+        <div class="card"><strong>會員卡標準｜透明背景</strong><p>完成標準化後保留透明背景，批次 ZIP 將以 PNG 輸出。</p></div>
+      </div>
+      <h3>批次狀態</h3>
+      <p>左側照片會依工作狀態標示：</p>
+      <ul>
+        <li>未處理</li>
+        <li>處理中</li>
+        <li><span class="badge pass">合格</span></li>
+        <li><span class="badge warn">待確認</span></li>
+        <li><span class="badge fail">需人工</span></li>
+        <li>已完成</li>
+      </ul>
+      <div class="callout green">
+        建議做法：整批跑完後，把狀態篩選切到「待確認」及「需人工」，只檢查這些照片即可。
+      </div>
+    </section>
+
+    <section class="section" id="filename">
+      <h2>批次檔名</h2>
+      <p>右側「匯出」可設定批次檔名規則：</p>
+      <ul>
+        <li>原檔名_edited</li>
+        <li>序號_原檔名</li>
+        <li>使用匯入／手動名稱</li>
+        <li>自訂範本</li>
+      </ul>
+      <p>自訂範本支援：</p>
+      <p>
+        <span class="code">{index}</span>
+        <span class="code">{original}</span>
+        <span class="code">{date}</span>
+        <span class="code">{status}</span>
+      </p>
+      <p>也可在左側批次區匯入 TXT / CSV 名稱清單，依照片順序套用名稱。</p>
+    </section>
+
+    <section class="section" id="session">
+      <h2>工作階段自動儲存與恢復</h2>
+      <p>V13 使用瀏覽器 IndexedDB 保存工作階段，不需要後端伺服器。</p>
+      <ul>
+        <li>一般編輯約 4 秒防抖後自動儲存。</li>
+        <li>AI 或批次處理執行期間會暫緩儲存，降低效能干擾。</li>
+        <li>重新開啟同一個網站時，可選擇「繼續上次工作」。</li>
+        <li>「檢視」Ribbon 也提供手動「儲存」與「清除儲存」。</li>
+      </ul>
+      <div class="callout amber">
+        工作階段保存在目前瀏覽器。若清除網站資料、使用其他瀏覽器或其他電腦，不會自動帶過去。
+      </div>
+    </section>
+
+    <section class="section" id="compare">
+      <h2>修改前／後比較</h2>
+      <p>提供兩種比較方式：</p>
+      <ul>
+        <li><strong>按住看修改前</strong>：按住按鈕暫時顯示原始照片。</li>
+        <li><strong>◫ 滑動比較</strong>：中央會顯示分隔線，可以左右拖曳比較修改前與修改後。</li>
+      </ul>
+    </section>
+
+    <section class="section" id="export">
+      <h2>輸出與批次 ZIP</h2>
+      <div class="grid">
+        <div class="card">
+          <strong>JPG</strong>
+          <p>適合白底會員照。若來源含透明區域，JPG 會以白色填補。</p>
+        </div>
+        <div class="card">
+          <strong>PNG</strong>
+          <p>適合透明背景，會保留 Alpha 透明資訊。</p>
+        </div>
+      </div>
+      <p>批次 ZIP 可混合 JPG 與 PNG：一般／白底照片輸出 JPG，透明背景照片輸出 PNG。</p>
+    </section>
+
+    <section class="section" id="ai">
+      <h2>AI 引擎與效能</h2>
+      <p>右側「檢查」頁面可以查看 AI 引擎狀態。</p>
+      <ul>
+        <li><strong>Face Landmarker</strong>：人臉 Landmark、2 吋裁切、自動轉正、臉部去污與品質檢查。</li>
+        <li><strong>Image Segmenter</strong>：人物去背。V13 採需要時才載入。</li>
+      </ul>
+      <p>如果大量去背後記憶體使用量偏高，可按「釋放去背引擎記憶體」。下次再使用去背時會重新載入模型。</p>
+    </section>
+
+    <section class="section" id="faq">
+      <h2>常見問題</h2>
+
+      <h3>Q：照片會上傳到伺服器嗎？</h3>
+      <p>目前主要影像編輯是在瀏覽器端進行。MediaPipe 的 JS / WASM 與模型檔會從網路載入，但你選取的照片不需要另外建立照片上傳 API。</p>
+
+      <h3>Q：為什麼第一次使用 AI 功能比較慢？</h3>
+      <p>瀏覽器需要下載及初始化 MediaPipe 模型。之後同一個瀏覽器通常會利用快取加快載入。</p>
+
+      <h3>Q：透明背景下載 JPG 為什麼變白色？</h3>
+      <p>JPG 不支援透明 Alpha，因此系統會自動使用白色填補。需要透明請下載 PNG。</p>
+
+      <h3>Q：批次處理某張失敗會整批停止嗎？</h3>
+      <p>設計上會盡量只把該張標示為「需人工」，其餘照片繼續處理。</p>
+
+      <h3>Q：品質檢查顯示「待確認」一定要修改嗎？</h3>
+      <p>不一定。黃色代表某些指標接近邊界，建議人工看一下；如果照片實際視覺效果正常，可以直接標記完成。</p>
+    </section>
+
+    <div class="footer">
+      會員照片標準化工作站 V13 操作教學｜與圖片編輯器放在同一個 GitHub Pages 專案即可
+    </div>
+  </main>
+</div>
+</body>
+</html>
