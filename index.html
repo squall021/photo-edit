@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <meta name="referrer" content="no-referrer" />
-<title>會員照片快速修圖工具 V12.7</title>
+<title>會員照片快速修圖工具 V12.8</title>
 <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
@@ -12,7 +12,7 @@
 
   <header class="titlebar">
     <div class="brand-row">
-      <h1>會員照片快速修圖工具 V12.7</h1>
+      <h1>會員照片快速修圖工具 V12.8</h1>
 
       <div class="mode-switch" aria-label="處理模式">
         <button id="singleModeBtn" class="active" type="button">單張修圖</button>
@@ -64,38 +64,36 @@
       </section>
 
       <section class="ribbon-panel batch-ribbon-panel" data-ribbon-panel="batch">
-        <div class="batch-ribbon-layout">
 
-          <div class="batch-ribbon-group batch-nav-group">
-            <div class="batch-ribbon-title">照片清單</div>
-            <div class="batch-command-row">
-              <button id="batchAddBtn" class="primary">＋ 加入多張照片</button>
-              <button id="batchPrevBtn" disabled>← 上一張</button>
-              <button id="batchNextBtn" disabled>下一張 →</button>
-            </div>
+        <div class="batch-ribbon-group batch-nav-group">
+          <div class="batch-ribbon-title">照片清單</div>
+          <div class="batch-command-row">
+            <button id="batchAddBtn" class="primary">＋ 加入多張照片</button>
+            <button id="batchPrevBtn" disabled>← 上一張</button>
+            <button id="batchNextBtn" disabled>下一張 →</button>
           </div>
-
-          <div class="batch-ribbon-group batch-process-group">
-            <div class="batch-ribbon-title">批次處理</div>
-            <div class="batch-process-grid">
-              <button id="batchCropBtn" disabled>🎯 批次自動 2 吋</button>
-              <button id="batchAutoBtn" disabled>批次智慧提亮</button>
-              <button id="batchCleanBtn" disabled>批次臉部去污</button>
-              <button id="batchBgWhiteBtn" disabled>批次去背（白色）</button>
-              <button id="batchBgTransparentBtn" disabled>批次去背（透明）</button>
-            </div>
-          </div>
-
-          <div class="batch-ribbon-group batch-output-group">
-            <div class="batch-ribbon-title">完成 / 匯出</div>
-            <div class="batch-command-row">
-              <button id="batchDoneBtn" disabled>✓ 標記完成</button>
-              <button id="batchZipBtn" disabled>下載全部 ZIP</button>
-              <button id="batchClearBtn" class="danger" disabled>清空批次</button>
-            </div>
-          </div>
-
         </div>
+
+        <div class="batch-ribbon-group batch-process-group">
+          <div class="batch-ribbon-title">批次處理</div>
+          <div class="batch-process-grid">
+            <button id="batchCropBtn" disabled>🎯 批次自動 2 吋</button>
+            <button id="batchAutoBtn" disabled>批次智慧提亮</button>
+            <button id="batchCleanBtn" disabled>批次臉部去污</button>
+            <button id="batchBgWhiteBtn" disabled>批次去背（白色）</button>
+            <button id="batchBgTransparentBtn" disabled>批次去背（透明）</button>
+          </div>
+        </div>
+
+        <div class="batch-ribbon-group batch-output-group">
+          <div class="batch-ribbon-title">完成 / 匯出</div>
+          <div class="batch-command-row">
+            <button id="batchDoneBtn" disabled>✓ 標記完成</button>
+            <button id="batchZipBtn" disabled>下載全部 ZIP</button>
+            <button id="batchClearBtn" class="danger" disabled>清空批次</button>
+          </div>
+        </div>
+
       </section>
 
       <section class="ribbon-panel" data-ribbon-panel="view">
