@@ -749,3 +749,43 @@ a.help-btn{
 a.help-btn:hover{
   text-decoration:none;
 }
+
+
+/* ============================================================
+   V13.2 — Manual straighten
+   ============================================================ */
+.manual-rotate-panel{
+  display:grid;
+  gap:8px;
+  padding:9px;
+  border:1px solid #dbeafe;
+  border-radius:9px;
+  background:#f8fbff;
+}
+
+.manual-rotate-step-row{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:6px;
+}
+
+.manual-rotate-step-row button{
+  min-height:32px;
+  padding:4px 6px;
+  font-size:11px;
+}
+
+.manual-rotate-preview .canvas-wrap{
+  transition:transform .08s linear;
+  will-change:transform;
+}
+
+.manual-rotate-preview .stage{
+  overflow:auto;
+}
+
+#manualRotateVal{
+  min-width:52px;
+  text-align:right;
+  font-variant-numeric:tabular-nums;
+}

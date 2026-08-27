@@ -4,8 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <meta name="referrer" content="no-referrer" />
-<title>會員照片標準化工作站 V13.1</title>
-<link rel="stylesheet" href="./style.css?v=13.1" />
+<title>會員照片標準化工作站 V13.2</title>
+<link rel="stylesheet" href="./style.css?v=13.2" />
 </head>
 <body>
 <div class="app desktop-app" id="app">
@@ -19,7 +19,7 @@
         <button id="batchModeBtn" type="button">批次處理</button>
       </div>
 
-      <a id="helpBtn" class="help-btn" href="./help.html?v=13.1" target="_blank" rel="noopener noreferrer">❓ 操作教學</a>
+      <a id="helpBtn" class="help-btn" href="./help.html?v=13.2" target="_blank" rel="noopener noreferrer">❓ 操作教學</a>
 
       <div id="faceModelStatus" class="model-status loading" title="MediaPipe Face Landmarker 狀態">
         <span class="model-dot"></span>
@@ -242,6 +242,36 @@
             <div><div class="label"><span>銳化</span><output id="sharpenVal">0</output></div>
               <input id="sharpen" type="range" min="0" max="3" step="1" value="0" disabled /></div>
 
+            <div class="manual-rotate-panel">
+              <div class="label">
+                <span>手動轉正</span>
+                <output id="manualRotateVal">0.0°</output>
+              </div>
+
+              <input id="manualRotateAngle"
+                     type="range"
+                     min="-15"
+                     max="15"
+                     step="0.1"
+                     value="0"
+                     disabled />
+
+              <div class="manual-rotate-step-row">
+                <button id="manualRotateMinusBtn" type="button" disabled>−0.5°</button>
+                <button id="manualRotateZeroBtn" type="button" disabled>歸零</button>
+                <button id="manualRotatePlusBtn" type="button" disabled>+0.5°</button>
+              </div>
+
+              <div class="row">
+                <button id="manualRotateApplyBtn" class="primary" type="button" disabled>套用手動轉正</button>
+                <button id="manualRotateCancelBtn" type="button" disabled>取消預覽</button>
+              </div>
+
+              <div class="small" id="manualRotateInfo">
+                可在 −15°～+15° 間以 0.1° 微調。拖曳時只預覽，按「套用手動轉正」後才會真正修改照片。
+              </div>
+            </div>
+
             <div class="row">
               <button id="autoBtn" class="primary" disabled>智慧自動提亮</button>
               <button id="quickBrightBtn" disabled>快速提亮</button>
@@ -438,6 +468,6 @@
 
 
 
-<script type="module" src="./app.js?v=13.1"></script>
+<script type="module" src="./app.js?v=13.2"></script>
 </body>
 </html>

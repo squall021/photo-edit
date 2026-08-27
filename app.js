@@ -1008,6 +1008,9 @@
   let compareSliderPosition = .5;
   let compareSliderDragging = false;
 
+  let manualRotateAngle = 0;
+  let manualRotatePreviewActive = false;
+
   let bgMaskEditing = false;
   let bgMaskCanvas = null;
   let bgMaskBaseCanvas = null;
@@ -1025,6 +1028,7 @@
 
   const controls = [
     'rotateLeftBtn','rotateRightBtn','autoHeadshotCropBtn','cropBtn','cropRatio','brightness','contrast','saturation','sharpen',
+    'manualRotateAngle','manualRotateMinusBtn','manualRotateZeroBtn','manualRotatePlusBtn','manualRotateApplyBtn','manualRotateCancelBtn',
     'autoBtn','quickBrightBtn','compareHoldBtn','compareSliderBtn','resetFilterBtn','smartAnalyzeBtn','smartCleanMode','smartCleanLevel','smartClearBtn',
     'standardizeBtn','autoStraightenBtn','qualityCheckBtn','inspectRunBtn','inspectStandardizeBtn',
     'healBtn','brush','bgOutputMode','bgFeather','removeBgBtn','maskAnalyzeBtn','downloadJpgBtn','downloadPngBtn','resetAllBtn',
@@ -1292,6 +1296,15 @@
       compareHolding=false;
       compareSliderMode=false;
       compareSliderDragging=false;
+      manualRotateAngle=0;
+      manualRotatePreviewActive=false;
+      if(canvasWrap){
+        canvasWrap.style.transform='';
+        canvasWrap.style.transformOrigin='';
+      }
+      app.classList.remove('manual-rotate-preview');
+      if($('manualRotateAngle')) $('manualRotateAngle').value='0';
+      if($('manualRotateVal')) $('manualRotateVal').textContent='0.0°';
       bgMaskEditing=false;
       bgMaskCanvas=null;
       bgMaskBaseCanvas=null;
@@ -1395,6 +1408,15 @@
     compareHolding=false;
     compareSliderMode=false;
     compareSliderDragging=false;
+    manualRotateAngle=0;
+    manualRotatePreviewActive=false;
+    if(canvasWrap){
+      canvasWrap.style.transform='';
+      canvasWrap.style.transformOrigin='';
+    }
+    if($('manualRotateAngle')) $('manualRotateAngle').value='0';
+    if($('manualRotateVal')) $('manualRotateVal').textContent='0.0°';
+    app.classList.remove('manual-rotate-preview');
     bgMaskEditing=false;
     bgMaskCanvas=null;
     bgMaskBaseCanvas=null;
@@ -2130,6 +2152,12 @@
   function setEnabled(on){
     controls.forEach(id => $(id).disabled = !on);
     $('smartApplyBtn').disabled = !on || smartSpots.length===0;
+    if($('manualRotateApplyBtn')){
+      $('manualRotateApplyBtn').disabled = !on || !manualRotatePreviewActive;
+    }
+    if($('manualRotateCancelBtn')){
+      $('manualRotateCancelBtn').disabled = !on || !manualRotatePreviewActive;
+    }
     updateHistoryButtons();
   }
 
@@ -2179,6 +2207,9 @@
     $('contrastVal').textContent = $('contrast').value + '%';
     $('saturationVal').textContent = $('saturation').value + '%';
     $('sharpenVal').textContent = $('sharpen').value;
+    if($('manualRotateVal')){
+      $('manualRotateVal').textContent = `${(+($('manualRotateAngle')?.value || 0)).toFixed(1)}°`;
+    }
     $('brushVal').textContent = $('brush').value + ' px';
     $('qualityVal').textContent = $('quality').value + '%';
     $('zoomVal').textContent = Math.round(zoomLevel) + '%';
@@ -3743,6 +3774,15 @@
       compareHolding=false;
       compareSliderMode=false;
       compareSliderDragging=false;
+      manualRotateAngle=0;
+      manualRotatePreviewActive=false;
+      if(canvasWrap){
+        canvasWrap.style.transform='';
+        canvasWrap.style.transformOrigin='';
+      }
+      app.classList.remove('manual-rotate-preview');
+      if($('manualRotateAngle')) $('manualRotateAngle').value='0';
+      if($('manualRotateVal')) $('manualRotateVal').textContent='0.0°';
       bgMaskEditing=false;
       bgMaskCanvas=null;
       bgMaskBaseCanvas=null;
@@ -3789,6 +3829,7 @@
 
   function rotate(deg){
     if(!source.width) return;
+    if(manualRotatePreviewActive) cancelManualRotatePreview({restoreModeText:false});
     const temp=document.createElement('canvas');
     const t=temp.getContext('2d');
     const cw=source.width, ch=source.height;
@@ -4000,6 +4041,130 @@
     },type,quality);
   }
 
+
+  // ============================================================
+  // V13.2 — manual straighten
+  // ============================================================
+
+  function setManualRotateAngle(value,{updateSlider=true}={}){
+    const angle=Math.max(-15,Math.min(15,Math.round((+value||0)*10)/10));
+    manualRotateAngle=angle;
+
+    if(updateSlider && $('manualRotateAngle')){
+      $('manualRotateAngle').value=angle.toFixed(1);
+    }
+    if($('manualRotateVal')){
+      $('manualRotateVal').textContent=`${angle.toFixed(1)}°`;
+    }
+
+    manualRotatePreviewActive=Math.abs(angle)>.001;
+    app.classList.toggle('manual-rotate-preview',manualRotatePreviewActive);
+
+    if(canvasWrap){
+      canvasWrap.style.transform=manualRotatePreviewActive
+        ? `rotate(${angle}deg)`
+        : '';
+      canvasWrap.style.transformOrigin='50% 50%';
+    }
+
+    if($('manualRotateApplyBtn')){
+      $('manualRotateApplyBtn').disabled=!source.width || !manualRotatePreviewActive;
+    }
+    if($('manualRotateCancelBtn')){
+      $('manualRotateCancelBtn').disabled=!source.width || !manualRotatePreviewActive;
+    }
+
+    if(manualRotatePreviewActive){
+      $('modeText').textContent=`手動轉正預覽：${angle.toFixed(1)}°（尚未套用）`;
+      if($('manualRotateInfo')){
+        $('manualRotateInfo').textContent=
+          `目前預覽 ${angle.toFixed(1)}°。拖曳只會改變預覽，按「套用手動轉正」後才會寫入照片。`;
+      }
+    }else if($('manualRotateInfo')){
+      $('manualRotateInfo').textContent=
+        '可在 −15°～+15° 間以 0.1° 微調。拖曳時只預覽，按「套用手動轉正」後才會真正修改照片。';
+    }
+  }
+
+  function cancelManualRotatePreview({restoreModeText=true}={}){
+    manualRotateAngle=0;
+    manualRotatePreviewActive=false;
+    if($('manualRotateAngle')) $('manualRotateAngle').value='0';
+    if($('manualRotateVal')) $('manualRotateVal').textContent='0.0°';
+    if(canvasWrap){
+      canvasWrap.style.transform='';
+      canvasWrap.style.transformOrigin='';
+    }
+    app.classList.remove('manual-rotate-preview');
+
+    if($('manualRotateApplyBtn')) $('manualRotateApplyBtn').disabled=!source.width;
+    if($('manualRotateCancelBtn')) $('manualRotateCancelBtn').disabled=!source.width;
+
+    if($('manualRotateInfo')){
+      $('manualRotateInfo').textContent=
+        '可在 −15°～+15° 間以 0.1° 微調。拖曳時只預覽，按「套用手動轉正」後才會真正修改照片。';
+    }
+
+    if(restoreModeText && source.width){
+      $('modeText').textContent=editorMode==='batch' && batchIndex>=0
+        ? `批次處理：第 ${batchIndex+1} / ${batchItems.length} 張`
+        : '預覽';
+    }
+  }
+
+  function prepareManualRotatePreview(){
+    if(!source.width) return;
+
+    if(compareSliderMode) toggleCompareSlider();
+    if(bgMaskEditing) endMaskRefinement();
+
+    if(cropMode) cancelCrop();
+
+    if(healMode){
+      healMode=false;
+      healCursor=null;
+      $('healBtn').classList.remove('active');
+      $('healBtn').textContent='去污筆：關閉';
+    }
+
+    smartSpots=[];
+    smartFaceRegion=null;
+    if($('smartApplyBtn')) $('smartApplyBtn').disabled=true;
+    drawOverlay();
+  }
+
+  async function applyManualRotate(){
+    if(!source.width || !manualRotatePreviewActive) return;
+
+    const angle=manualRotateAngle;
+    prepareManualRotatePreview();
+
+    // Remove CSS preview first; the actual rotation is applied from the
+    // original current source only once, so repeated slider movement
+    // does not repeatedly resample the image.
+    cancelManualRotatePreview({restoreModeText:false});
+
+    const rotated=rotateCanvasExpanded(
+      source,
+      angle,
+      sourceHasTransparency
+    );
+
+    replaceSourceCanvas(rotated,{transparent:sourceHasTransparency});
+    resetSmartCleanInfo();
+    pushHistory();
+    touchCurrentBatchItem();
+    updateMeta();
+    await renderPreview();
+
+    $('modeText').textContent=`已套用手動轉正 ${angle.toFixed(1)}°`;
+    if($('manualRotateInfo')){
+      $('manualRotateInfo').textContent=
+        `已套用 ${angle.toFixed(1)}°。若仍需微調，可再次拖曳角度。`;
+    }
+
+    scheduleSessionSave();
+  }
 
   // ============================================================
   // V13 — standardization / inspection / queue / session
@@ -4506,6 +4671,7 @@
 
   async function runSingleStandardize(){
     if(!source.width||workflowBusy) return;
+    if(manualRotatePreviewActive) cancelManualRotatePreview({restoreModeText:false});
     workflowBusy=true;
     $('standardizeBtn').disabled=true;
     $('inspectStandardizeBtn').disabled=true;
@@ -4554,6 +4720,7 @@
 
   async function runSingleAutoStraighten(){
     if(!source.width||workflowBusy) return;
+    if(manualRotatePreviewActive) cancelManualRotatePreview({restoreModeText:false});
     workflowBusy=true;
     showWorkflowToast('正在分析雙眼水平線…');
     try{
@@ -5138,6 +5305,32 @@
     }
   });
 
+  $('manualRotateAngle').addEventListener('input',()=>{
+    if(!source.width) return;
+    prepareManualRotatePreview();
+    setManualRotateAngle($('manualRotateAngle').value,{updateSlider:false});
+  });
+
+  $('manualRotateMinusBtn').onclick=()=>{
+    if(!source.width) return;
+    prepareManualRotatePreview();
+    setManualRotateAngle(manualRotateAngle-.5);
+  };
+
+  $('manualRotateZeroBtn').onclick=()=>{
+    if(!source.width) return;
+    cancelManualRotatePreview();
+  };
+
+  $('manualRotatePlusBtn').onclick=()=>{
+    if(!source.width) return;
+    prepareManualRotatePreview();
+    setManualRotateAngle(manualRotateAngle+.5);
+  };
+
+  $('manualRotateApplyBtn').onclick=applyManualRotate;
+  $('manualRotateCancelBtn').onclick=()=>cancelManualRotatePreview();
+
   $('standardizeBtn').onclick=runSingleStandardize;
   $('inspectStandardizeBtn').onclick=runSingleStandardize;
   $('autoStraightenBtn').onclick=runSingleAutoStraighten;
@@ -5217,6 +5410,7 @@
 
   $('autoHeadshotCropBtn').onclick=async()=>{
     if(!source.width) return;
+    if(manualRotatePreviewActive) cancelManualRotatePreview({restoreModeText:false});
     if(compareSliderMode) toggleCompareSlider();
     if(bgMaskEditing) endMaskRefinement();
 
@@ -5243,6 +5437,7 @@
 
   $('cropBtn').onclick=()=>{
     if(!source.width) return;
+    if(manualRotatePreviewActive) cancelManualRotatePreview({restoreModeText:false});
     if(compareSliderMode) toggleCompareSlider();
     if(bgMaskEditing) endMaskRefinement();
     smartSpots=[];

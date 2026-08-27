@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>會員照片標準化工作站 V13｜操作教學</title>
+<title>會員照片標準化工作站 V13.2｜操作教學</title>
 <style>
 :root{
   --bg:#f3f6fb;
@@ -256,7 +256,7 @@ th{background:#f8fafc}
 
 <header class="topbar">
   <div class="brand">
-    <strong>會員照片標準化工作站 V13</strong>
+    <strong>會員照片標準化工作站 V13.2</strong>
     <span>操作教學與批次處理說明</span>
   </div>
   <div class="top-actions">
@@ -274,6 +274,7 @@ th{background:#f8fafc}
     <a href="#standardize">一鍵標準化</a>
     <a href="#quality">品質檢查</a>
     <a href="#straighten">自動轉正</a>
+    <a href="#manual-straighten">手動轉正</a>
     <a href="#cleanup">智慧去污</a>
     <a href="#background">人物去背與遮罩細修</a>
     <a href="#crop">裁切功能</a>
@@ -401,6 +402,26 @@ th{background:#f8fafc}
       </p>
       <div class="callout">
         若偵測到的角度太大，系統不會強行旋轉，而會提示人工確認，以避免錯誤判斷。
+      </div>
+    </section>
+
+
+    <section class="section" id="manual-straighten">
+      <h2>手動轉正</h2>
+      <p>
+        如果自動轉正的結果不符合需求，或照片只是非常輕微地歪斜，可以到右側
+        「影像」→「影像調整」使用手動轉正。
+      </p>
+      <ul>
+        <li>角度範圍：−15°～+15°。</li>
+        <li>最小調整單位：0.1°。</li>
+        <li>可使用 −0.5° / 歸零 / +0.5° 按鈕進行細部微調。</li>
+        <li>拖曳角度時中央照片只做即時預覽，不會反覆修改原始像素。</li>
+        <li>確認後按「套用手動轉正」，系統才會真正旋轉照片並加入復原紀錄。</li>
+        <li>按「取消預覽」或「歸零」即可回到尚未旋轉的狀態。</li>
+      </ul>
+      <div class="callout green">
+        建議先使用「自動轉正」，如果仍有約 0.5°～3° 的視覺偏差，再使用手動轉正微調。
       </div>
     </section>
 
