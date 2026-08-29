@@ -4,8 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <meta name="referrer" content="no-referrer" />
-<title>會員照片標準化工作站 V13.2</title>
-<link rel="stylesheet" href="./style.css?v=13.2" />
+<title>會員照片標準化工作站 V13.5</title>
+<link rel="stylesheet" href="./style.css?v=13.5" />
 </head>
 <body>
 <div class="app desktop-app" id="app">
@@ -19,7 +19,7 @@
         <button id="batchModeBtn" type="button">批次處理</button>
       </div>
 
-      <a id="helpBtn" class="help-btn" href="./help.html?v=13.2" target="_blank" rel="noopener noreferrer">❓ 操作教學</a>
+      <a id="helpBtn" class="help-btn" href="./help.html?v=13.5" target="_blank" rel="noopener noreferrer">❓ 操作教學</a>
 
       <div id="faceModelStatus" class="model-status loading" title="MediaPipe Face Landmarker 狀態">
         <span class="model-dot"></span>
@@ -60,7 +60,7 @@
           <div class="ribbon-commands">
             <button id="rotateLeftBtn" disabled>↶ 左轉</button>
             <button id="rotateRightBtn" disabled>↷ 右轉</button>
-            <button id="autoHeadshotCropBtn" disabled>🎯 2 吋裁切建議</button>
+            <button id="autoHeadshotCropBtn" disabled>🎯 會員照裁切建議</button>
             <button id="cropBtn" disabled>✂ 手動裁切</button>
             <button id="compareHoldBtn" disabled>👁 按住看修改前</button>
           </div>
@@ -89,7 +89,7 @@
         <div class="batch-ribbon-group batch-process-group">
           <div class="batch-ribbon-title">批次處理</div>
           <div class="batch-process-grid">
-            <button id="batchCropBtn" disabled>🎯 自動 2 吋</button>
+            <button id="batchCropBtn" disabled>🎯 自動會員照</button>
             <button id="batchAutoBtn" disabled>智慧提亮</button>
             <button id="batchCleanBtn" disabled>臉部去污</button>
             <button id="batchBgWhiteBtn" disabled>去背（白色）</button>
@@ -154,7 +154,7 @@
           <select id="batchWorkflowPreset" title="批次標準化流程">
             <option value="member-white">會員卡標準｜白底</option>
             <option value="member-keep-bg">會員卡標準｜保留背景</option>
-            <option value="crop-only">只做 2 吋裁切</option>
+            <option value="crop-only">只做會員照裁切</option>
             <option value="transparent">會員卡標準｜透明背景</option>
           </select>
 
@@ -370,12 +370,13 @@
               <option value="0.6666666667">2 : 3　直式</option>
               <option value="0.75">3 : 4　直式</option>
               <option value="0.7777777778">2 吋大頭照　3.5 × 4.5 公分</option>
+              <option value="0.9130434783">會員照　2.1 × 2.3 公分</option>
               <option value="0.8">4 : 5　直式</option>
               <option value="0.5625">9 : 16　直式</option>
               <option value="1.7777777778">16 : 9　橫式</option>
             </select>
             <div class="mp-note">
-              「2 吋裁切建議」或「手動裁切」啟動後，中央照片區會直接顯示
+              「會員照裁切建議」或「手動裁切」啟動後，中央照片區會直接顯示
               「確認並完成裁切」按鈕，不需要再回右側尋找套用按鈕。
             </div>
           </div>
@@ -389,7 +390,7 @@
             </div>
 
             <div id="qualityList" class="quality-list">
-              <div class="small">檢查項目包含：2 吋比例、臉部數量、頭部比例、置中、歪斜、解析度、清晰度與背景。</div>
+              <div class="small">檢查項目包含：會員照比例、臉部數量、頭部比例、置中、歪斜、解析度、清晰度與背景。</div>
             </div>
 
             <div class="row">
@@ -468,6 +469,6 @@
 
 
 
-<script type="module" src="./app.js?v=13.2"></script>
+<script type="module" src="./app.js?v=13.5"></script>
 </body>
 </html>

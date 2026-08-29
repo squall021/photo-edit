@@ -579,6 +579,50 @@
     };
   }
 
+  async function suggestMemberPhotoCropRectMP(inputCanvas){
+    const face=await detectMediaPipeFace(inputCanvas);
+    if(!face) return null;
+
+    const chin=face.points[152]?.y ?? (face.bbox.y+face.bbox.h);
+    const headTop=mpFindHeadTop(inputCanvas,face);
+    const headHeight=Math.max(1,chin-headTop);
+
+    // V13.4 會員照：2.1 × 2.3 cm，固定比例 21:23。
+    // 頭頂到下顎仍以約 75% 作為建議中心值，
+    // 延續原本會員照的人臉大小邏輯。
+    const ratio=2.1/2.3;
+    const targetHeadRatio=.75;
+    const topMarginRatio=.10;
+
+    let cropH=headHeight/targetHeadRatio;
+    let cropW=cropH*ratio;
+    const faceCenterX=(face.bbox.x+face.bbox.w/2);
+
+    let rect=mpClampRect({
+      x:faceCenterX-cropW/2,
+      y:headTop-cropH*topMarginRatio,
+      w:cropW,
+      h:cropH
+    },inputCanvas.width,inputCanvas.height);
+
+    const coverage=headHeight/rect.h;
+    const faceAreaRatio=face.area/(inputCanvas.width*inputCanvas.height);
+    const reliable=
+      face.bbox.w>24 &&
+      face.bbox.h>28 &&
+      faceAreaRatio>.003 &&
+      coverage>=.62 && coverage<=.86;
+
+    return {
+      rect,
+      face,
+      faceCoverage:coverage,
+      headTop,
+      chin,
+      reliable
+    };
+  }
+
   function mpBuildSafeSkinPredicate(face,workScale){
     const pts=face.points.map(p=>({x:p.x*workScale,y:p.y*workScale}));
     const oval=mpShrinkPolygon(mpPolygon(pts,MP_FACE_OVAL),.89);
@@ -770,7 +814,7 @@
     };
   }
 
-  async function processBlobAutoHeadshotCropMP(blob){
+  async function processBlobAutoMemberCropMP(blob){
     const img=await blobToImage(blob);
     const c=document.createElement("canvas");
     c.width=img.naturalWidth;
@@ -778,7 +822,7 @@
     const ctx=c.getContext("2d",{willReadFrequently:true});
     ctx.drawImage(img,0,0);
 
-    const suggestion=await suggestTaiwanHeadshotCropRectMP(c);
+    const suggestion=await suggestMemberPhotoCropRectMP(c);
     if(!suggestion || !suggestion.reliable){
       return {success:false,reason:"face-not-detected"};
     }
@@ -796,7 +840,7 @@
       : {success:false,reason:"encode-failed"};
   }
 
-  async function runBatchAutoHeadshotCropMP(){
+  async function runBatchAutoMemberCropMP(){
     if(!batchItems.length || batchBusy) return;
     await saveCurrentBatchItem();
 
@@ -821,8 +865,8 @@
           continue;
         }
 
-        showBatchProgress(`MediaPipe 自動裁成 2 吋：${i+1} / ${batchItems.length}　${item.file.name}`);
-        const result=await processBlobAutoHeadshotCropMP(item.editedBlob || item.file);
+        showBatchProgress(`MediaPipe 自動裁成會員照：${i+1} / ${batchItems.length}　${item.file.name}`);
+        const result=await processBlobAutoMemberCropMP(item.editedBlob || item.file);
 
         if(result.success){
           item.editedBlob=result.blob;
@@ -830,7 +874,7 @@
           item.adjusted=true;
           item.done=false;
           item.autoCropped=true;
-          item.cropInfo=`MediaPipe 2 吋裁切，頭部約佔 ${Math.round(result.faceCoverage*100)}%`;
+          item.cropInfo=`MediaPipe 會員照 2.1 × 2.3 公分裁切，頭部約佔 ${Math.round(result.faceCoverage*100)}%`;
           success++;
         }else{
           item.cropInfo="自動裁切跳過：MediaPipe 未辨識到可靠臉部";
@@ -857,7 +901,7 @@
           current.file,
           !!current.hasTransparency
         );
-        $("cropRatio").value="0.7777777778";
+        $("cropRatio").value="0.9130434783";
         $("modeText").textContent=`批次處理：第 ${batchIndex+1} / ${batchItems.length} 張`;
         renderBatchList();
       }
@@ -3819,7 +3863,7 @@
       if($('qualitySummary') && $('qualityList')){
         $('qualitySummary').className='quality-summary idle';
         $('qualitySummary').textContent='尚未檢查';
-        $('qualityList').innerHTML='<div class="small">檢查項目包含：2 吋比例、臉部數量、頭部比例、置中、歪斜、解析度、清晰度與背景。</div>';
+        $('qualityList').innerHTML='<div class="small">檢查項目包含：會員照比例、臉部數量、頭部比例、置中、歪斜、解析度、清晰度與背景。</div>';
       }
       renderPreview();
       URL.revokeObjectURL(url);
@@ -4379,7 +4423,7 @@
     const faces=await detectAllMediaPipeFaces(inputCanvas);
     const face=faces.slice().sort((a,b)=>b.area-a.area)[0] || null;
     const ratio=inputCanvas.width/inputCanvas.height;
-    const targetRatio=3.5/4.5;
+    const targetRatio=2.1/2.3;
     const ratioDiff=Math.abs(ratio-targetRatio);
 
     const checks=[];
@@ -4388,10 +4432,10 @@
     };
 
     add(
-      'ratio','2 吋比例',
+      'ratio','會員照比例',
       `${inputCanvas.width}:${inputCanvas.height}`,
       ratioDiff<=.015?'pass':ratioDiff<=.055?'warn':'fail',
-      '目標 3.5 : 4.5'
+      '目標 2.1 : 2.3（21 : 23）'
     );
 
     add(
@@ -4441,14 +4485,15 @@
       add('tilt','臉部歪斜','無法判斷','fail','未偵測到臉部');
     }
 
-    const minW=413,minH=531;
+    // 2.1 × 2.3 cm at 300 dpi ≈ 248 × 272 px.
+    const minW=248,minH=272;
     const resOK=inputCanvas.width>=minW&&inputCanvas.height>=minH;
-    const resWarn=inputCanvas.width>=300&&inputCanvas.height>=386;
+    const resWarn=inputCanvas.width>=180&&inputCanvas.height>=197;
     add(
       'resolution','解析度',
       `${inputCanvas.width} × ${inputCanvas.height}`,
       resOK?'pass':resWarn?'warn':'fail',
-      '2 吋 300dpi 約 413 × 531 px'
+      '會員照 2.1 × 2.3 cm、300dpi 約 248 × 272 px'
     );
 
     const sharp=calcSharpnessScore(inputCanvas);
@@ -4589,7 +4634,7 @@
       straighten:true,crop:true,brighten:true,background:null,clean:true
     },
     'crop-only':{
-      label:'只做 2 吋裁切',
+      label:'只做會員照裁切',
       straighten:false,crop:true,brighten:false,background:null,clean:false
     },
     'transparent':{
@@ -4616,13 +4661,13 @@
     }
 
     if(preset.crop){
-      progress('依 2 吋規格建立裁切…');
-      const suggestion=await suggestTaiwanHeadshotCropRectMP(working);
+      progress('依會員照 2.1 × 2.3 公分規格建立裁切…');
+      const suggestion=await suggestMemberPhotoCropRectMP(working);
       if(!suggestion?.reliable){
-        return {success:false,reason:'無法可靠建立 2 吋裁切',canvas:working,notes};
+        return {success:false,reason:'無法可靠建立會員照裁切',canvas:working,notes};
       }
       working=cropCanvasBySourceRect(working,suggestion.rect);
-      notes.push(`頭部約 ${Math.round(suggestion.faceCoverage*100)}%`);
+      notes.push(`會員照 2.1×2.3、頭部約 ${Math.round(suggestion.faceCoverage*100)}%`);
     }
 
     if(preset.brighten){
@@ -5386,7 +5431,7 @@
 
   $('batchPrevBtn').onclick=()=>loadBatchItem(batchIndex-1);
   $('batchNextBtn').onclick=()=>loadBatchItem(batchIndex+1);
-  $('batchCropBtn').onclick=runBatchAutoHeadshotCropMP;
+  $('batchCropBtn').onclick=runBatchAutoMemberCropMP;
   $('batchAutoBtn').onclick=runBatchSmartBright;
   $('batchCleanBtn').onclick=runBatchSmartCleanMP;
   $('batchBgWhiteBtn').onclick=()=>runBatchRemoveBackgroundMP('white');
@@ -5414,11 +5459,11 @@
     if(compareSliderMode) toggleCompareSlider();
     if(bgMaskEditing) endMaskRefinement();
 
-    $('cropRatio').value='0.7777777778';
+    $('cropRatio').value='0.9130434783';
     $('modeText').textContent='MediaPipe 正在定位臉部與頭頂…';
 
     try{
-      const suggestion=await suggestTaiwanHeadshotCropRectMP(source);
+      const suggestion=await suggestMemberPhotoCropRectMP(source);
       if(!suggestion || !suggestion.reliable){
         $('modeText').textContent='MediaPipe 未能可靠找到臉部，為避免錯裁已停止。請改用手動裁切。';
         return;
@@ -5427,7 +5472,7 @@
       const coveragePct=Math.round(suggestion.faceCoverage*100);
       enterSuggestedCropModeFromSourceRect(
         suggestion.rect,
-        `MediaPipe 2 吋裁切建議：頭頂至下顎約佔 ${coveragePct}%（目標 70%～80%）。可微調後套用。`
+        `MediaPipe 會員照裁切建議：2.1 × 2.3 公分，頭頂至下顎約佔 ${coveragePct}%（目標 70%～80%）。可微調後套用。`
       );
     }catch(err){
       console.error(err);

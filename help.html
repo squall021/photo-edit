@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>會員照片標準化工作站 V13.2｜操作教學</title>
+<title>會員照片標準化工作站 V13.5｜操作教學</title>
 <style>
 :root{
   --bg:#f3f6fb;
@@ -256,7 +256,7 @@ th{background:#f8fafc}
 
 <header class="topbar">
   <div class="brand">
-    <strong>會員照片標準化工作站 V13.2</strong>
+    <strong>會員照片標準化工作站 V13.5</strong>
     <span>操作教學與批次處理說明</span>
   </div>
   <div class="top-actions">
@@ -297,7 +297,7 @@ th{background:#f8fafc}
       <div class="hero-flow">
         <span class="flow">加入照片</span>
         <span class="flow">自動轉正</span>
-        <span class="flow">2 吋裁切</span>
+        <span class="flow">會員照裁切</span>
         <span class="flow">智慧提亮</span>
         <span class="flow">去污／去背</span>
         <span class="flow">品質檢查</span>
@@ -313,7 +313,7 @@ th{background:#f8fafc}
           <div><strong>加入照片</strong><p>單張處理按「上傳照片」；大量照片切到上方「批次」分頁後，按「加入多張照片」。</p></div>
         </div>
         <div class="step">
-          <div><strong>先用「✨ 一鍵標準化」</strong><p>系統會依序處理方向、2 吋裁切、亮度、背景與保守去污，最後自動執行品質檢查。</p></div>
+          <div><strong>先用「✨ 一鍵標準化」</strong><p>系統會依序處理方向、會員照 2.1 × 2.3 公分裁切、亮度、背景與保守去污，最後自動執行品質檢查。</p></div>
         </div>
         <div class="step">
           <div><strong>檢查品質結果</strong><p>綠色「合格」通常可直接使用；黃色「待確認」及紅色「需人工」再進行人工修正。</p></div>
@@ -355,9 +355,13 @@ th{background:#f8fafc}
     <section class="section" id="standardize">
       <h2>✨ 一鍵會員照標準化</h2>
       <p>這是 V13 最主要的功能。按一次後，系統會自動執行一整套會員照片處理流程。</p>
+      <div class="callout green">
+        V13.5 起，「✨ 一鍵標準化」、會員照裁切建議與批次自動會員照的裁切基準統一為 <strong>會員照 2.1 × 2.3 公分</strong>；
+        V13.5 起，獨立的「會員照裁切建議」也改為 2.1 × 2.3 公分，與一鍵標準化及批次自動會員照統一。
+      </div>
       <ol>
         <li>以 MediaPipe 人臉 Landmark 分析左右眼並自動轉正。</li>
-        <li>建立台灣 2 吋大頭照 3.5 × 4.5 比例裁切。</li>
+        <li>建立會員照 2.1 × 2.3 公分（21:23）比例裁切。</li>
         <li>調整頭頂至下顎約占照片高度 70%～80%。</li>
         <li>智慧分析亮度、對比、飽和度與銳化。</li>
         <li>檢查背景；會員卡白底模式下，必要時才執行人物去背。</li>
@@ -376,13 +380,13 @@ th{background:#f8fafc}
         <table>
           <thead><tr><th>檢查項目</th><th>內容</th><th>結果</th></tr></thead>
           <tbody>
-            <tr><td>2 吋比例</td><td>確認是否接近 3.5 : 4.5</td><td><span class="badge pass">合格</span> / 警告</td></tr>
+            <tr><td>會員照比例</td><td>確認是否接近 2.1 : 2.3（21:23）</td><td><span class="badge pass">合格</span> / 警告</td></tr>
             <tr><td>人臉數量</td><td>會員照原則上只應有一張臉</td><td>1 人最佳</td></tr>
             <tr><td>頭部比例</td><td>頭頂至下顎占照片高度</td><td>目標 70%～80%</td></tr>
             <tr><td>人臉置中</td><td>檢查臉部水平偏移</td><td>越接近中央越佳</td></tr>
             <tr><td>臉部歪斜</td><td>以雙眼 Landmark 判斷</td><td>±2° 內最佳</td></tr>
             <tr><td>頭頂留白</td><td>避免切到頭頂或留白太多</td><td>依照片自動判斷</td></tr>
-            <tr><td>解析度</td><td>2 吋 300dpi 約需 413 × 531 px</td><td>不足會警告</td></tr>
+            <tr><td>解析度</td><td>會員照 2.1 × 2.3 cm、300dpi 約需 248 × 272 px</td><td>不足會警告</td></tr>
             <tr><td>清晰度</td><td>分析影像邊緣／細節</td><td>良好 / 稍模糊 / 偏模糊</td></tr>
             <tr><td>背景</td><td>檢查白底比例或透明背景</td><td>白底／透明可直接通過</td></tr>
           </tbody>
@@ -459,12 +463,18 @@ th{background:#f8fafc}
 
     <section class="section" id="crop">
       <h2>裁切功能</h2>
-      <p>支援手動裁切及自動 2 吋裁切建議。</p>
+      <div class="callout green">
+        V13.5 起，「會員照裁切建議」與批次「自動會員照」都使用
+        <strong>2.1 × 2.3 公分（21:23）</strong>。裁切比例選單中的
+        2 吋 3.5 × 4.5 公分仍保留，只有手動選用時才會使用。
+      </div>
+      <p>支援手動裁切及自動會員照裁切建議。</p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>比例</th><th>用途</th></tr></thead>
           <tbody>
             <tr><td>3.5 : 4.5</td><td>台灣 2 吋大頭照</td></tr>
+            <tr><td>2.1 : 2.3</td><td>會員照 2.1 × 2.3 公分</td></tr>
             <tr><td>9 : 16</td><td>直式社群／手機畫面</td></tr>
             <tr><td>4 : 5</td><td>一般直式照片</td></tr>
             <tr><td>其他</td><td>依工具選單提供的比例使用</td></tr>
@@ -472,6 +482,10 @@ th{background:#f8fafc}
         </table>
       </div>
       <p>進入裁切後，「確認並完成裁切」會浮在照片工作區上方，不會推動照片位置。</p>
+      <div class="callout">
+        「會員照 2.1 × 2.3 公分」會鎖定為 21:23 的裁切比例。裁切本身保留原照片像素；
+        若要輸出成指定 DPI 的固定像素尺寸，可再搭配右側「輸出尺寸」設定。
+      </div>
     </section>
 
     <section class="section" id="batch">
@@ -479,9 +493,9 @@ th{background:#f8fafc}
       <p>大量照片建議直接使用批次模式，而不是逐張重複按每一個工具。</p>
       <h3>批次 Preset</h3>
       <div class="grid">
-        <div class="card"><strong>會員卡標準｜白底</strong><p>轉正 → 2 吋裁切 → 提亮 → 必要時白底 → 去污 → 品質檢查。</p></div>
+        <div class="card"><strong>會員卡標準｜白底</strong><p>轉正 → 會員照 2.1 × 2.3 裁切 → 提亮 → 必要時白底 → 去污 → 品質檢查。</p></div>
         <div class="card"><strong>會員卡標準｜保留背景</strong><p>保留原背景，其餘依會員照流程處理。</p></div>
-        <div class="card"><strong>只做 2 吋裁切</strong><p>只執行自動裁切，不變更亮度、背景與臉部。</p></div>
+        <div class="card"><strong>只做會員照裁切</strong><p>只裁切為 2.1 × 2.3 公分比例，不變更亮度、背景與臉部。</p></div>
         <div class="card"><strong>會員卡標準｜透明背景</strong><p>完成標準化後保留透明背景，批次 ZIP 將以 PNG 輸出。</p></div>
       </div>
       <h3>批次狀態</h3>
@@ -560,7 +574,7 @@ th{background:#f8fafc}
       <h2>AI 引擎與效能</h2>
       <p>右側「檢查」頁面可以查看 AI 引擎狀態。</p>
       <ul>
-        <li><strong>Face Landmarker</strong>：人臉 Landmark、2 吋裁切、自動轉正、臉部去污與品質檢查。</li>
+        <li><strong>Face Landmarker</strong>：人臉 Landmark、會員照／2 吋裁切、自動轉正、臉部去污與品質檢查。</li>
         <li><strong>Image Segmenter</strong>：人物去背。V13 採需要時才載入。</li>
       </ul>
       <p>如果大量去背後記憶體使用量偏高，可按「釋放去背引擎記憶體」。下次再使用去背時會重新載入模型。</p>
