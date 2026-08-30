@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>會員照片標準化工作站 V13.5｜操作教學</title>
+<title>會員照片標準化工作站 V14｜操作教學</title>
 <style>
 :root{
   --bg:#f3f6fb;
@@ -256,7 +256,7 @@ th{background:#f8fafc}
 
 <header class="topbar">
   <div class="brand">
-    <strong>會員照片標準化工作站 V13.5</strong>
+    <strong>會員照片標準化工作站 V14</strong>
     <span>操作教學與批次處理說明</span>
   </div>
   <div class="top-actions">
@@ -270,6 +270,7 @@ th{background:#f8fafc}
     <div class="nav-title">操作教學</div>
     <a href="#overview">功能總覽</a>
     <a href="#quick-start">快速開始</a>
+    <a href="#scan-split">掃描表拆圖</a>
     <a href="#interface">介面說明</a>
     <a href="#standardize">一鍵標準化</a>
     <a href="#quality">品質檢查</a>
@@ -291,7 +292,7 @@ th{background:#f8fafc}
     <section class="hero" id="overview">
       <h1>會員照片標準化工作站 V13</h1>
       <p>
-        V13 的核心不是單純修圖，而是把會員照片依固定流程自動標準化，
+        V14 的核心除了會員照標準化，也加入整張掃描表自動拆圖，
         再透過品質檢查找出真正需要人工確認的照片。
       </p>
       <div class="hero-flow">
@@ -330,6 +331,37 @@ th{background:#f8fafc}
       </div>
     </section>
 
+
+    <section class="section" id="scan-split">
+      <h2>📄 掃描表拆圖</h2>
+      <p>
+        適合把多張紙本會員照片貼在一張紙上，再整頁掃描進電腦的工作方式。
+        V14 不依賴照片外框或表格格線，而是先找整張掃描頁上的所有人臉。
+      </p>
+
+      <div class="steps">
+        <div class="step">
+          <div><strong>切到「掃描表拆圖」</strong><p>在右上方模式切換選擇第三個「掃描表拆圖」。</p></div>
+        </div>
+        <div class="step">
+          <div><strong>加入一頁或多頁掃描圖</strong><p>支援一次加入多張 JPG / PNG 掃描頁。</p></div>
+        </div>
+        <div class="step">
+          <div><strong>偵測目前頁或全部頁</strong><p>MediaPipe 會搜尋頁面上的多人臉，自動建立候選照片框。空白格、紅筆記號、格線與姓名文字通常不會被當成照片。</p></div>
+        </div>
+        <div class="step">
+          <div><strong>人工確認候選框</strong><p>漏抓時用「＋ 手動新增框」拖曳補上；誤抓可選取後刪除，也可取消候選框勾選。</p></div>
+        </div>
+        <div class="step">
+          <div><strong>全部拆分或拆分並標準化</strong><p>「全部拆分」只把候選區域變成獨立照片；「全部拆分並標準化」會直接送進會員照 2.1 × 2.3 cm 標準化及品質檢查。</p></div>
+        </div>
+      </div>
+
+      <div class="callout green">
+        這個流程是「人臉優先」，因此不需要紙本照片貼得很整齊，也不需要每張照片都有完整可辨識的矩形外框。
+      </div>
+    </section>
+
     <section class="section" id="interface">
       <h2>介面說明</h2>
       <div class="grid">
@@ -354,7 +386,13 @@ th{background:#f8fafc}
 
     <section class="section" id="standardize">
       <h2>✨ 一鍵會員照標準化</h2>
-      <p>這是 V13 最主要的功能。按一次後，系統會自動執行一整套會員照片處理流程。</p>
+      <p>這是 V14 主要的會員照自動處理功能。</p>
+      <div class="callout green">
+        V14 的自動裁切採「頭頂優先定位」：上下位置不再用人臉中心決定，
+        頭頂目標只保留約 5%～6% 留白；左右仍保留基本水平置中，避免臉偏向一側。
+        這可降低舊流程出現頭頂大面積白邊的情況。
+      </div>
+
       <div class="callout green">
         V13.5 起，「✨ 一鍵標準化」、會員照裁切建議與批次自動會員照的裁切基準統一為 <strong>會員照 2.1 × 2.3 公分</strong>；
         V13.5 起，獨立的「會員照裁切建議」也改為 2.1 × 2.3 公分，與一鍵標準化及批次自動會員照統一。
@@ -383,7 +421,7 @@ th{background:#f8fafc}
             <tr><td>會員照比例</td><td>確認是否接近 2.1 : 2.3（21:23）</td><td><span class="badge pass">合格</span> / 警告</td></tr>
             <tr><td>人臉數量</td><td>會員照原則上只應有一張臉</td><td>1 人最佳</td></tr>
             <tr><td>頭部比例</td><td>頭頂至下顎占照片高度</td><td>目標 70%～80%</td></tr>
-            <tr><td>人臉置中</td><td>檢查臉部水平偏移</td><td>越接近中央越佳</td></tr>
+            <tr><td>頭頂留白</td><td>檢查頭頂與照片上緣的留白比例</td><td>越接近中央越佳</td></tr>
             <tr><td>臉部歪斜</td><td>以雙眼 Landmark 判斷</td><td>±2° 內最佳</td></tr>
             <tr><td>頭頂留白</td><td>避免切到頭頂或留白太多</td><td>依照片自動判斷</td></tr>
             <tr><td>解析度</td><td>會員照 2.1 × 2.3 cm、300dpi 約需 248 × 272 px</td><td>不足會警告</td></tr>

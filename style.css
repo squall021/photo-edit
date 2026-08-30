@@ -789,3 +789,277 @@ a.help-btn:hover{
   text-align:right;
   font-variant-numeric:tabular-nums;
 }
+
+
+/* ============================================================
+   V14 — 掃描表拆圖
+   ============================================================ */
+
+.app.scan-active .ribbon-tabbar,
+.app.scan-active .ribbon-content{
+  display:none;
+}
+
+.workspace.scan-mode{
+  grid-template-columns:1fr;
+}
+
+.workspace.scan-mode > #leftPane,
+.workspace.scan-mode > #dropZone,
+.workspace.scan-mode > #rightPane{
+  display:none !important;
+}
+
+.scan-workspace{
+  min-width:0;
+  min-height:0;
+  display:grid;
+  grid-template-columns:230px minmax(0,1fr) 300px;
+  gap:10px;
+  height:100%;
+  padding:10px;
+}
+
+.scan-workspace[hidden]{
+  display:none;
+}
+
+.scan-pages-pane,
+.scan-main-pane,
+.scan-results-pane{
+  min-width:0;
+  min-height:0;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:#fff;
+  overflow:hidden;
+}
+
+.scan-pages-pane,
+.scan-results-pane{
+  display:flex;
+  flex-direction:column;
+  padding:10px;
+}
+
+.scan-side-actions{
+  display:grid;
+  gap:6px;
+  flex:0 0 auto;
+  margin-bottom:8px;
+}
+
+.scan-side-actions button{
+  min-height:34px;
+}
+
+.scan-pages-list{
+  min-height:0;
+  overflow:auto;
+  display:grid;
+  gap:7px;
+}
+
+.scan-page-item{
+  display:grid;
+  grid-template-columns:56px minmax(0,1fr);
+  gap:8px;
+  align-items:center;
+  padding:6px;
+  border:1px solid #e2e8f0;
+  border-radius:9px;
+  cursor:pointer;
+  background:#fff;
+}
+
+.scan-page-item.active{
+  border-color:#60a5fa;
+  box-shadow:0 0 0 2px rgba(37,99,235,.10);
+  background:#eff6ff;
+}
+
+.scan-page-thumb{
+  width:56px;
+  height:72px;
+  object-fit:cover;
+  border-radius:5px;
+  border:1px solid #e2e8f0;
+  background:#f8fafc;
+}
+
+.scan-page-name{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:12px;
+  font-weight:700;
+}
+
+.scan-page-state{
+  margin-top:3px;
+  color:#64748b;
+  font-size:11px;
+}
+
+.scan-main-pane{
+  display:flex;
+  flex-direction:column;
+}
+
+.scan-toolbar{
+  flex:0 0 auto;
+  min-height:54px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:8px 10px;
+  border-bottom:1px solid var(--line);
+  background:#f8fafc;
+}
+
+.scan-toolbar > div:first-child{
+  min-width:0;
+}
+
+.scan-toolbar-actions{
+  margin-left:auto;
+  display:flex;
+  gap:6px;
+}
+
+.scan-toolbar-actions button{
+  width:auto;
+  min-height:34px;
+  padding:5px 8px;
+  white-space:nowrap;
+}
+
+.scan-stage{
+  position:relative;
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:12px;
+  background:
+    linear-gradient(45deg,#f8fafc 25%,transparent 25%),
+    linear-gradient(-45deg,#f8fafc 25%,transparent 25%),
+    linear-gradient(45deg,transparent 75%,#f8fafc 75%),
+    linear-gradient(-45deg,transparent 75%,#f8fafc 75%);
+  background-size:28px 28px;
+  background-position:0 0,0 14px,14px -14px,-14px 0;
+}
+
+.scan-empty{
+  color:#64748b;
+  text-align:center;
+  font-size:13px;
+}
+
+.scan-canvas-wrap{
+  position:relative;
+  line-height:0;
+  box-shadow:0 8px 28px rgba(15,23,42,.12);
+}
+
+.scan-canvas-wrap canvas{
+  display:block;
+}
+
+#scanOverlay{
+  position:absolute;
+  inset:0;
+  cursor:default;
+}
+
+.scan-progress{
+  flex:0 0 auto;
+  min-height:31px;
+  padding:6px 10px;
+  border-top:1px solid var(--line);
+  color:#475569;
+  background:#fff;
+  font-size:12px;
+}
+
+.scan-result-note{
+  flex:0 0 auto;
+  margin-bottom:8px;
+  padding:8px 9px;
+  border:1px solid #bfdbfe;
+  border-radius:8px;
+  background:#eff6ff;
+  color:#1e3a8a;
+  font-size:11px;
+  line-height:1.55;
+}
+
+.scan-candidates-list{
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  display:grid;
+  align-content:start;
+  gap:6px;
+}
+
+.scan-candidate-item{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  gap:7px;
+  align-items:center;
+  padding:7px;
+  border:1px solid #e2e8f0;
+  border-radius:8px;
+  background:#fff;
+  cursor:pointer;
+}
+
+.scan-candidate-item.active{
+  border-color:#60a5fa;
+  background:#eff6ff;
+}
+
+.scan-candidate-name{
+  font-size:12px;
+  font-weight:750;
+}
+
+.scan-candidate-meta{
+  color:#64748b;
+  font-size:10px;
+}
+
+.scan-candidate-badge{
+  padding:2px 6px;
+  border-radius:999px;
+  font-size:10px;
+  font-weight:800;
+  background:#f1f5f9;
+  color:#475569;
+}
+
+.scan-export-actions{
+  flex:0 0 auto;
+  display:grid;
+  gap:7px;
+  margin-top:9px;
+}
+
+.scan-export-actions button{
+  min-height:38px;
+}
+
+@media (max-width:1250px){
+  .scan-workspace{
+    grid-template-columns:190px minmax(560px,1fr) 260px;
+    overflow-x:auto;
+  }
+}
+
+/* V14：會員照構圖以頭頂定位為主，不用垂直人臉置中 */
+.quality-row[data-quality-key="headTop"]{
+  border-color:#bfdbfe;
+}

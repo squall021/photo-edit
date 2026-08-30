@@ -4,22 +4,23 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <meta name="referrer" content="no-referrer" />
-<title>會員照片標準化工作站 V13.5</title>
-<link rel="stylesheet" href="./style.css?v=13.5" />
+<title>會員照片標準化工作站 V14</title>
+<link rel="stylesheet" href="./style.css?v=14.0" />
 </head>
 <body>
 <div class="app desktop-app" id="app">
 
   <header class="titlebar">
     <div class="brand-row">
-      <h1>會員照片標準化工作站 V13</h1>
+      <h1>會員照片標準化工作站 V14</h1>
 
       <div class="mode-switch" aria-label="處理模式">
         <button id="singleModeBtn" class="active" type="button">單張修圖</button>
         <button id="batchModeBtn" type="button">批次處理</button>
+        <button id="scanModeBtn" type="button">掃描表拆圖</button>
       </div>
 
-      <a id="helpBtn" class="help-btn" href="./help.html?v=13.5" target="_blank" rel="noopener noreferrer">❓ 操作教學</a>
+      <a id="helpBtn" class="help-btn" href="./help.html?v=14.0" target="_blank" rel="noopener noreferrer">❓ 操作教學</a>
 
       <div id="faceModelStatus" class="model-status loading" title="MediaPipe Face Landmarker 狀態">
         <span class="model-dot"></span>
@@ -129,6 +130,75 @@
   </header>
 
   <main class="workspace" id="mainLayout">
+
+    <section id="scanWorkspace" class="scan-workspace" hidden>
+      <aside class="scan-pages-pane">
+        <div class="pane-heading">
+          <div>
+            <strong>掃描頁</strong>
+            <div class="small" id="scanPageSummary">尚未加入掃描頁</div>
+          </div>
+        </div>
+
+        <div class="scan-side-actions">
+          <button id="scanOpenBtn" class="primary" type="button">＋ 加入掃描頁</button>
+          <input id="scanFileInput" type="file" accept="image/*" multiple hidden />
+          <button id="scanDetectBtn" type="button" disabled>偵測目前頁</button>
+          <button id="scanDetectAllBtn" type="button" disabled>偵測全部頁</button>
+        </div>
+
+        <div id="scanPagesList" class="scan-pages-list"></div>
+      </aside>
+
+      <section class="scan-main-pane">
+        <div class="scan-toolbar">
+          <div>
+            <strong id="scanTitle">掃描表拆圖</strong>
+            <span class="small" id="scanHint">加入整張掃描表後，先偵測人臉候選照片。</span>
+          </div>
+
+          <div class="scan-toolbar-actions">
+            <button id="scanManualBoxBtn" type="button" disabled>＋ 手動新增框</button>
+            <button id="scanDeleteBoxBtn" type="button" disabled>刪除選取框</button>
+            <button id="scanSelectAllBtn" type="button" disabled>全選候選</button>
+          </div>
+        </div>
+
+        <div id="scanStage" class="scan-stage">
+          <div id="scanEmpty" class="scan-empty">
+            <div style="font-size:44px">📄</div>
+            加入會員申請表掃描圖
+          </div>
+          <div id="scanCanvasWrap" class="scan-canvas-wrap" hidden>
+            <canvas id="scanCanvas"></canvas>
+            <canvas id="scanOverlay"></canvas>
+          </div>
+        </div>
+
+        <div id="scanProgress" class="scan-progress"></div>
+      </section>
+
+      <aside class="scan-results-pane">
+        <div class="pane-heading">
+          <div>
+            <strong>候選照片</strong>
+            <div class="small" id="scanCandidateSummary">0 個候選框</div>
+          </div>
+        </div>
+
+        <div class="scan-result-note">
+          系統以人臉為主，不依賴表格線或照片外框。空白格、紅筆記號與姓名文字通常不會被當成照片。
+        </div>
+
+        <div id="scanCandidatesList" class="scan-candidates-list"></div>
+
+        <div class="scan-export-actions">
+          <button id="scanSplitBtn" type="button" disabled>全部拆分</button>
+          <button id="scanSplitStandardizeBtn" class="primary" type="button" disabled>全部拆分並標準化</button>
+        </div>
+      </aside>
+    </section>
+
     <aside class="workspace-pane left-pane" id="leftPane">
       <div id="batchPanel" class="batch-panel" hidden>
         <div class="pane-heading">
@@ -469,6 +539,6 @@
 
 
 
-<script type="module" src="./app.js?v=13.5"></script>
+<script type="module" src="./app.js?v=14.0"></script>
 </body>
 </html>

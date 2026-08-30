@@ -125,9 +125,9 @@
           ...(delegate ? {delegate} : {})
         },
         runningMode:"IMAGE",
-        numFaces:3,
-        minFaceDetectionConfidence:.55,
-        minFacePresenceConfidence:.55,
+        numFaces:30,
+        minFaceDetectionConfidence:.45,
+        minFacePresenceConfidence:.45,
         minTrackingConfidence:.5,
         outputFaceBlendshapes:false,
         outputFacialTransformationMatrixes:false
@@ -592,10 +592,17 @@
     // 延續原本會員照的人臉大小邏輯。
     const ratio=2.1/2.3;
     const targetHeadRatio=.75;
-    const topMarginRatio=.10;
+
+    // V14：上下位置改成「頭頂優先定位」。
+    // 不再嘗試把臉放在畫面垂直中央；頭頂只保留約 5.5% 留白，
+    // 讓構圖接近實際會員照，而不是上方留下大面積空白。
+    const topMarginRatio=.055;
 
     let cropH=headHeight/targetHeadRatio;
     let cropW=cropH*ratio;
+
+    // 左右仍維持基本水平置中，避免臉明顯偏左／偏右。
+    // 這只影響 X 軸，不會造成頭頂留白。
     const faceCenterX=(face.bbox.x+face.bbox.w/2);
 
     let rect=mpClampRect({
@@ -1012,6 +1019,18 @@
   const stageArea = $('stageArea');
   const mainLayout = $('mainLayout');
 
+  const scanWorkspace = $('scanWorkspace');
+  const scanFileInput = $('scanFileInput');
+  const scanPagesList = $('scanPagesList');
+  const scanCandidatesList = $('scanCandidatesList');
+  const scanCanvas = $('scanCanvas');
+  const scanCtx = scanCanvas.getContext('2d',{willReadFrequently:true});
+  const scanOverlay = $('scanOverlay');
+  const scanOctx = scanOverlay.getContext('2d');
+  const scanCanvasWrap = $('scanCanvasWrap');
+  const scanEmpty = $('scanEmpty');
+  const scanStage = $('scanStage');
+
   const source = document.createElement('canvas');
   const sctx = source.getContext('2d', { willReadFrequently: true });
 
@@ -1035,6 +1054,17 @@
   let batchIndex = -1;
   let batchBusy = false;
   let loadingBatchItem = false;
+
+  // V14 scan-sheet splitter
+  let scanPages = [];
+  let scanPageIndex = -1;
+  let scanCandidateSeq = 1;
+  let scanSelectedCandidateId = null;
+  let scanManualBoxMode = false;
+  let scanDragStart = null;
+  let scanDragCurrent = null;
+  let scanViewScale = 1;
+  let scanRenderToken = 0;
   let sourceDirty = false;
   let smartSpots = [];
   let smartFaceRegion = null;
@@ -1467,6 +1497,550 @@
     app.classList.remove('compare-slider-active','mask-active');
   }
 
+
+  // ============================================================
+  // V14 — 掃描表拆圖
+  // ============================================================
+
+  function scanSetProgress(text){
+    if($('scanProgress')) $('scanProgress').textContent=text || '';
+  }
+
+  function scanCurrentPage(){
+    return scanPageIndex>=0 ? scanPages[scanPageIndex] : null;
+  }
+
+  async function ensureScanPageImage(page){
+    if(page.image?.naturalWidth) return page.image;
+    page.image=await blobToImage(page.file);
+    return page.image;
+  }
+
+  function scanClampRect(rect,w,h){
+    let x=Math.max(0,Math.min(w-1,rect.x));
+    let y=Math.max(0,Math.min(h-1,rect.y));
+    let rw=Math.max(1,Math.min(w-x,rect.w));
+    let rh=Math.max(1,Math.min(h-y,rect.h));
+    return {x,y,w:rw,h:rh};
+  }
+
+  function scanRectIoU(a,b){
+    const x1=Math.max(a.x,b.x);
+    const y1=Math.max(a.y,b.y);
+    const x2=Math.min(a.x+a.w,b.x+b.w);
+    const y2=Math.min(a.y+a.h,b.y+b.h);
+    const iw=Math.max(0,x2-x1);
+    const ih=Math.max(0,y2-y1);
+    const inter=iw*ih;
+    if(!inter) return 0;
+    return inter/(a.w*a.h+b.w*b.h-inter);
+  }
+
+  function scanCandidateRectFromFace(face,pageW,pageH){
+    const b=face.bbox;
+    const cx=b.x+b.w/2;
+
+    // 先抓出「人臉周圍足夠大的局部照片」，不必精準沿紙本照片外框。
+    // 後續會員照標準化會再依頭頂／下顎做精確裁切。
+    const w=b.w*2.55;
+    const h=b.h*3.05;
+    const x=cx-w/2;
+    const y=b.y-b.h*.62;
+
+    return scanClampRect({x,y,w,h},pageW,pageH);
+  }
+
+  function sortScanCandidates(candidates){
+    candidates.sort((a,b)=>{
+      const ay=a.rect.y+a.rect.h/2;
+      const by=b.rect.y+b.rect.h/2;
+      const rowTol=Math.max(a.rect.h,b.rect.h)*.35;
+      if(Math.abs(ay-by)>rowTol) return ay-by;
+      return a.rect.x-b.rect.x;
+    });
+  }
+
+  async function detectFacesForScanPage(page){
+    const img=await ensureScanPageImage(page);
+
+    const maxSide=1800;
+    const scale=Math.min(1,maxSide/Math.max(img.naturalWidth,img.naturalHeight));
+    const work=document.createElement('canvas');
+    work.width=Math.max(1,Math.round(img.naturalWidth*scale));
+    work.height=Math.max(1,Math.round(img.naturalHeight*scale));
+    const wctx=work.getContext('2d',{willReadFrequently:true});
+    wctx.drawImage(img,0,0,work.width,work.height);
+
+    const faces=await detectAllMediaPipeFaces(work);
+    const inv=1/scale;
+    const auto=[];
+
+    for(const face of faces){
+      const mapped={
+        bbox:{
+          x:face.bbox.x*inv,
+          y:face.bbox.y*inv,
+          w:face.bbox.w*inv,
+          h:face.bbox.h*inv
+        },
+        area:face.area*inv*inv
+      };
+
+      if(mapped.bbox.w<18 || mapped.bbox.h<22) continue;
+
+      const rect=scanCandidateRectFromFace(
+        mapped,
+        img.naturalWidth,
+        img.naturalHeight
+      );
+
+      if(auto.some(c=>scanRectIoU(c.rect,rect)>.58)) continue;
+
+      auto.push({
+        id:scanCandidateSeq++,
+        rect,
+        enabled:true,
+        source:'auto',
+        faceBox:mapped.bbox
+      });
+    }
+
+    sortScanCandidates(auto);
+
+    // 保留使用者手動新增的框；重新偵測時只更新自動框。
+    const manual=(page.candidates||[]).filter(c=>c.source==='manual');
+    page.candidates=[...auto,...manual];
+    sortScanCandidates(page.candidates);
+    page.detected=true;
+    page.detectedAt=Date.now();
+
+    work.width=1;work.height=1;
+    return auto.length;
+  }
+
+  function renderScanPagesList(){
+    if(!scanPagesList) return;
+    scanPagesList.innerHTML='';
+
+    scanPages.forEach((page,index)=>{
+      const row=document.createElement('div');
+      row.className='scan-page-item'+(index===scanPageIndex?' active':'');
+      row.dataset.index=index;
+
+      const img=document.createElement('img');
+      img.className='scan-page-thumb';
+      img.src=page.thumbUrl;
+      img.alt='';
+
+      const info=document.createElement('div');
+      const name=document.createElement('div');
+      name.className='scan-page-name';
+      name.textContent=page.file.name;
+      name.title=page.file.name;
+
+      const state=document.createElement('div');
+      state.className='scan-page-state';
+      state.textContent=page.detected
+        ? `候選 ${page.candidates.filter(c=>c.enabled).length} / ${page.candidates.length}`
+        : '尚未偵測';
+
+      info.append(name,state);
+      row.append(img,info);
+      row.addEventListener('click',()=>loadScanPage(index));
+      scanPagesList.appendChild(row);
+    });
+
+    $('scanPageSummary').textContent=scanPages.length
+      ? `共 ${scanPages.length} 頁`
+      : '尚未加入掃描頁';
+  }
+
+  function renderScanCandidateList(){
+    if(!scanCandidatesList) return;
+    scanCandidatesList.innerHTML='';
+    const page=scanCurrentPage();
+    const candidates=page?.candidates || [];
+
+    candidates.forEach((c,index)=>{
+      const row=document.createElement('div');
+      row.className='scan-candidate-item'+(c.id===scanSelectedCandidateId?' active':'');
+      row.dataset.id=c.id;
+
+      const check=document.createElement('input');
+      check.type='checkbox';
+      check.checked=!!c.enabled;
+      check.addEventListener('click',ev=>ev.stopPropagation());
+      check.addEventListener('change',()=>{
+        c.enabled=check.checked;
+        renderScanCandidateList();
+        drawScanOverlay();
+        updateScanButtons();
+      });
+
+      const info=document.createElement('div');
+      const name=document.createElement('div');
+      name.className='scan-candidate-name';
+      name.textContent=`${String(index+1).padStart(2,'0')} 候選照片`;
+      const meta=document.createElement('div');
+      meta.className='scan-candidate-meta';
+      meta.textContent=`${Math.round(c.rect.w)} × ${Math.round(c.rect.h)} px`;
+      info.append(name,meta);
+
+      const badge=document.createElement('span');
+      badge.className='scan-candidate-badge';
+      badge.textContent=c.source==='manual'?'手動':'人臉';
+
+      row.append(check,info,badge);
+      row.addEventListener('click',()=>{
+        scanSelectedCandidateId=c.id;
+        renderScanCandidateList();
+        drawScanOverlay();
+        updateScanButtons();
+      });
+      scanCandidatesList.appendChild(row);
+    });
+
+    const enabled=candidates.filter(c=>c.enabled).length;
+    $('scanCandidateSummary').textContent=`${enabled} / ${candidates.length} 個候選框已選`;
+  }
+
+  function updateScanButtons(){
+    const page=scanCurrentPage();
+    const hasPage=!!page;
+    const hasCandidates=scanPages.some(p=>(p.candidates||[]).some(c=>c.enabled));
+
+    $('scanDetectBtn').disabled=!hasPage;
+    $('scanDetectAllBtn').disabled=!scanPages.length;
+    $('scanManualBoxBtn').disabled=!hasPage;
+    $('scanSelectAllBtn').disabled=!hasPage || !(page?.candidates?.length);
+    $('scanDeleteBoxBtn').disabled=!hasPage || scanSelectedCandidateId==null;
+    $('scanSplitBtn').disabled=!hasCandidates;
+    $('scanSplitStandardizeBtn').disabled=!hasCandidates;
+  }
+
+  async function renderScanPage(){
+    const token=++scanRenderToken;
+    const page=scanCurrentPage();
+
+    if(!page){
+      scanCanvasWrap.hidden=true;
+      scanEmpty.hidden=false;
+      scanCanvas.width=1;scanCanvas.height=1;
+      scanOverlay.width=1;scanOverlay.height=1;
+      renderScanCandidateList();
+      updateScanButtons();
+      return;
+    }
+
+    const img=await ensureScanPageImage(page);
+    if(token!==scanRenderToken) return;
+
+    const maxW=Math.max(420,(scanStage?.clientWidth||900)-30);
+    const maxH=Math.max(500,(scanStage?.clientHeight||900)-30);
+    scanViewScale=Math.min(maxW/img.naturalWidth,maxH/img.naturalHeight,1.0);
+
+    scanCanvas.width=Math.max(1,Math.round(img.naturalWidth*scanViewScale));
+    scanCanvas.height=Math.max(1,Math.round(img.naturalHeight*scanViewScale));
+    scanOverlay.width=scanCanvas.width;
+    scanOverlay.height=scanCanvas.height;
+
+    scanCtx.clearRect(0,0,scanCanvas.width,scanCanvas.height);
+    scanCtx.drawImage(img,0,0,scanCanvas.width,scanCanvas.height);
+
+    scanCanvasWrap.hidden=false;
+    scanEmpty.hidden=true;
+    $('scanTitle').textContent=`掃描表拆圖｜${page.file.name}`;
+    $('scanHint').textContent=page.detected
+      ? '藍框為自動偵測；綠框為手動新增。勾選後可一次拆分。'
+      : '按「偵測目前頁」找出所有人臉；漏掉的照片可用手動新增框。';
+
+    drawScanOverlay();
+    renderScanCandidateList();
+    renderScanPagesList();
+    updateScanButtons();
+  }
+
+  function drawScanOverlay(){
+    if(!scanOverlay.width) return;
+    scanOctx.clearRect(0,0,scanOverlay.width,scanOverlay.height);
+
+    const page=scanCurrentPage();
+    if(!page) return;
+
+    page.candidates.forEach((c,index)=>{
+      const r={
+        x:c.rect.x*scanViewScale,
+        y:c.rect.y*scanViewScale,
+        w:c.rect.w*scanViewScale,
+        h:c.rect.h*scanViewScale
+      };
+
+      scanOctx.save();
+      scanOctx.strokeStyle=c.id===scanSelectedCandidateId
+        ? '#f59e0b'
+        : c.source==='manual'
+          ? '#059669'
+          : c.enabled ? '#2563eb' : '#94a3b8';
+      scanOctx.lineWidth=c.id===scanSelectedCandidateId?3:2;
+      if(!c.enabled) scanOctx.setLineDash([6,5]);
+      scanOctx.strokeRect(r.x,r.y,r.w,r.h);
+
+      scanOctx.fillStyle=scanOctx.strokeStyle;
+      scanOctx.fillRect(r.x,r.y,28,20);
+      scanOctx.fillStyle='#fff';
+      scanOctx.font='bold 12px Segoe UI, sans-serif';
+      scanOctx.fillText(String(index+1).padStart(2,'0'),r.x+5,r.y+14);
+      scanOctx.restore();
+    });
+
+    if(scanManualBoxMode && scanDragStart && scanDragCurrent){
+      const x=Math.min(scanDragStart.x,scanDragCurrent.x)*scanViewScale;
+      const y=Math.min(scanDragStart.y,scanDragCurrent.y)*scanViewScale;
+      const w=Math.abs(scanDragCurrent.x-scanDragStart.x)*scanViewScale;
+      const h=Math.abs(scanDragCurrent.y-scanDragStart.y)*scanViewScale;
+      scanOctx.save();
+      scanOctx.strokeStyle='#059669';
+      scanOctx.lineWidth=2;
+      scanOctx.setLineDash([7,4]);
+      scanOctx.strokeRect(x,y,w,h);
+      scanOctx.restore();
+    }
+  }
+
+  function scanPointerToOriginal(ev){
+    const rect=scanOverlay.getBoundingClientRect();
+    const sx=scanOverlay.width/Math.max(1,rect.width);
+    const sy=scanOverlay.height/Math.max(1,rect.height);
+    return {
+      x:(ev.clientX-rect.left)*sx/scanViewScale,
+      y:(ev.clientY-rect.top)*sy/scanViewScale
+    };
+  }
+
+  function scanCandidateAtPoint(p){
+    const page=scanCurrentPage();
+    if(!page) return null;
+    const hits=page.candidates.filter(c=>
+      p.x>=c.rect.x&&p.x<=c.rect.x+c.rect.w&&
+      p.y>=c.rect.y&&p.y<=c.rect.y+c.rect.h
+    );
+    return hits.sort((a,b)=>a.rect.w*a.rect.h-b.rect.w*b.rect.h)[0] || null;
+  }
+
+  async function loadScanPage(index){
+    if(index<0||index>=scanPages.length) return;
+    scanPageIndex=index;
+    scanSelectedCandidateId=null;
+    scanManualBoxMode=false;
+    scanDragStart=null;
+    scanDragCurrent=null;
+    $('scanManualBoxBtn').classList.remove('active');
+    await renderScanPage();
+  }
+
+  async function addScanPages(fileList){
+    const files=[...fileList].filter(f=>f?.type?.startsWith('image/'));
+    if(!files.length) return;
+
+    for(const file of files){
+      scanPages.push({
+        file,
+        thumbUrl:URL.createObjectURL(file),
+        image:null,
+        candidates:[],
+        detected:false
+      });
+    }
+
+    renderScanPagesList();
+    if(scanPageIndex<0) await loadScanPage(0);
+    else updateScanButtons();
+  }
+
+  async function detectCurrentScanPage(){
+    const page=scanCurrentPage();
+    if(!page) return;
+
+    scanSetProgress('MediaPipe 正在偵測目前掃描頁的所有人臉…');
+    $('scanDetectBtn').disabled=true;
+    $('scanDetectAllBtn').disabled=true;
+    try{
+      const count=await detectFacesForScanPage(page);
+      scanSetProgress(`偵測完成：找到 ${count} 個自動候選框。若有漏掉，可使用「手動新增框」。`);
+      scanSelectedCandidateId=null;
+      await renderScanPage();
+    }catch(err){
+      scanSetProgress('掃描頁偵測失敗：'+(err?.message||'未知錯誤'));
+    }finally{
+      updateScanButtons();
+    }
+  }
+
+  async function detectAllScanPages(){
+    if(!scanPages.length) return;
+
+    $('scanDetectBtn').disabled=true;
+    $('scanDetectAllBtn').disabled=true;
+    let total=0;
+
+    try{
+      for(let i=0;i<scanPages.length;i++){
+        scanSetProgress(`偵測掃描頁 ${i+1} / ${scanPages.length}：${scanPages[i].file.name}`);
+        const count=await detectFacesForScanPage(scanPages[i]);
+        total+=count;
+        if(i===scanPageIndex) await renderScanPage();
+        else renderScanPagesList();
+        await new Promise(r=>setTimeout(r,0));
+      }
+      scanSetProgress(`全部頁面偵測完成：共找到 ${total} 個自動候選框。`);
+    }catch(err){
+      scanSetProgress('偵測全部頁面時發生錯誤：'+(err?.message||'未知錯誤'));
+    }finally{
+      updateScanButtons();
+    }
+  }
+
+  async function cropScanCandidateToFile(page,candidate,pageIndex,itemIndex){
+    const img=await ensureScanPageImage(page);
+    const r=scanClampRect(candidate.rect,img.naturalWidth,img.naturalHeight);
+    const c=document.createElement('canvas');
+    c.width=Math.max(1,Math.round(r.w));
+    c.height=Math.max(1,Math.round(r.h));
+    const ctx=c.getContext('2d',{willReadFrequently:true});
+    ctx.fillStyle='#fff';
+    ctx.fillRect(0,0,c.width,c.height);
+    ctx.drawImage(
+      img,
+      r.x,r.y,r.w,r.h,
+      0,0,c.width,c.height
+    );
+    const blob=await canvasToBlob(c,'image/jpeg',.98);
+    c.width=1;c.height=1;
+    return new File(
+      [blob],
+      `scan_p${String(pageIndex+1).padStart(2,'0')}_${String(itemIndex+1).padStart(2,'0')}.jpg`,
+      {type:'image/jpeg'}
+    );
+  }
+
+  async function standardizeBatchRangeV14(startIndex,endIndex){
+    const presetKey='member-white';
+    const preset=V13_WORKFLOW_PRESETS[presetKey];
+    let pass=0,review=0,manual=0,failed=0;
+
+    batchBusy=true;
+    updateBatchButtons();
+
+    try{
+      for(let i=startIndex;i<endIndex;i++){
+        const item=batchItems[i];
+        item.workflowState='processing';
+        renderBatchList();
+        showBatchProgress(`掃描拆圖標準化：${i-startIndex+1} / ${endIndex-startIndex}　${item.file.name}`);
+
+        try{
+          let c=await blobToCanvasV13(item.editedBlob||item.file);
+          const result=await standardizeCanvasV13(c,presetKey,()=>{});
+          c=null;
+
+          if(!result.success){
+            item.workflowState='manual';
+            item.quality={status:'fail',score:0,checks:[]};
+            item.workflowNote=result.reason;
+            failed++;
+          }else{
+            const type=result.transparent?'image/png':'image/jpeg';
+            item.editedBlob=await canvasToBlob(result.canvas,type,.97);
+            item.hasTransparency=result.transparent;
+            item.filters=defaultBatchFilters();
+            item.adjusted=true;
+            item.done=false;
+            item.quality=result.quality;
+            item.workflowState=workflowStateFromQuality(result.quality);
+            item.workflowPreset=presetKey;
+            item.workflowNote='掃描表拆圖｜'+result.notes.join('、');
+
+            if(item.workflowState==='pass') pass++;
+            else if(item.workflowState==='review') review++;
+            else manual++;
+          }
+        }catch(err){
+          item.workflowState='manual';
+          item.workflowNote=err?.message||'標準化失敗';
+          failed++;
+        }
+
+        renderBatchList();
+        await new Promise(r=>setTimeout(r,0));
+      }
+
+      showBatchProgress(
+        `掃描表拆圖標準化完成：合格 ${pass}、待確認 ${review}、需人工 ${manual}、失敗 ${failed}。`,
+        true
+      );
+    }finally{
+      batchBusy=false;
+      updateBatchButtons();
+      scheduleSessionSave();
+    }
+  }
+
+  async function splitScanCandidates({standardize=false}={}){
+    const selected=[];
+    scanPages.forEach((page,pageIndex)=>{
+      (page.candidates||[]).forEach((candidate,index)=>{
+        if(candidate.enabled){
+          selected.push({page,pageIndex,candidate,index});
+        }
+      });
+    });
+
+    if(!selected.length){
+      scanSetProgress('目前沒有已勾選的候選照片。');
+      return;
+    }
+
+    $('scanSplitBtn').disabled=true;
+    $('scanSplitStandardizeBtn').disabled=true;
+
+    try{
+      const files=[];
+      for(let i=0;i<selected.length;i++){
+        const item=selected[i];
+        scanSetProgress(`正在拆分 ${i+1} / ${selected.length}…`);
+        files.push(await cropScanCandidateToFile(
+          item.page,
+          item.candidate,
+          item.pageIndex,
+          item.index
+        ));
+        await new Promise(r=>setTimeout(r,0));
+      }
+
+      const start=batchItems.length;
+      await addBatchFiles(files);
+      const end=batchItems.length;
+
+      if(standardize){
+        await standardizeBatchRangeV14(start,end);
+      }
+
+      if(start<batchItems.length){
+        await loadBatchItem(start);
+      }
+
+      scanSetProgress(
+        standardize
+          ? `已拆分 ${files.length} 張並完成會員照標準化，已送入批次清單。`
+          : `已拆分 ${files.length} 張，已送入批次清單。`
+      );
+    }catch(err){
+      scanSetProgress('拆分照片失敗：'+(err?.message||'未知錯誤'));
+    }finally{
+      updateScanButtons();
+    }
+  }
+
   async function switchEditorMode(mode){
     if(mode===editorMode) return;
 
@@ -1476,17 +2050,40 @@
 
     editorMode=mode;
     const batch=mode==='batch';
+    const scan=mode==='scan';
+    const single=mode==='single';
 
-    $('singleModeBtn').classList.toggle('active',!batch);
+    $('singleModeBtn').classList.toggle('active',single);
     $('batchModeBtn').classList.toggle('active',batch);
+    $('scanModeBtn').classList.toggle('active',scan);
+
     $('batchPanel').hidden=!batch;
-    if($('singleInfoPanel')) $('singleInfoPanel').hidden=batch;
+    if($('singleInfoPanel')) $('singleInfoPanel').hidden=!single;
+
     mainLayout.classList.toggle('batch-mode',batch);
+    mainLayout.classList.toggle('scan-mode',scan);
     app.classList.toggle('batch-active',batch);
+    app.classList.toggle('scan-active',scan);
+    scanWorkspace.hidden=!scan;
+
     $('openBtn').textContent=batch ? '加入照片' : '上傳照片';
-    if(typeof activateRibbonTab==='function'){
+
+    if(!scan && typeof activateRibbonTab==='function'){
       activateRibbonTab(batch ? 'batch' : 'home');
     }
+
+    if(scan){
+      batchIndex=-1;
+      scanSetProgress(
+        scanPages.length
+          ? '可繼續偵測、手動補框或拆分照片。'
+          : '加入整張掃描表後，先使用「偵測目前頁」或「偵測全部頁」。'
+      );
+      renderScanPagesList();
+      await renderScanPage();
+      return;
+    }
+
     $('stageHint').textContent=batch
       ? '批次模式：上一張／下一張快速檢查；局部修圖會在切換時保存'
       : '可拖曳圖片到中央區域；放大僅影響檢視，不會改變照片尺寸';
@@ -3863,7 +4460,7 @@
       if($('qualitySummary') && $('qualityList')){
         $('qualitySummary').className='quality-summary idle';
         $('qualitySummary').textContent='尚未檢查';
-        $('qualityList').innerHTML='<div class="small">檢查項目包含：會員照比例、臉部數量、頭部比例、置中、歪斜、解析度、清晰度與背景。</div>';
+        $('qualityList').innerHTML='<div class="small">檢查項目包含：會員照比例、臉部數量、頭部比例、頭頂留白、歪斜、解析度、清晰度與背景。</div>';
       }
       renderPreview();
       URL.revokeObjectURL(url);
@@ -4445,13 +5042,12 @@
       '會員照建議只有 1 張臉'
     );
 
-    let tilt=0,coverage=0,centerOffset=1,headTopRatio=0;
+    let tilt=0,coverage=0,headTopRatio=0;
     if(face){
       tilt=getFaceTiltDegrees(face);
       const chin=face.points[152]?.y ?? (face.bbox.y+face.bbox.h);
       const headTop=mpFindHeadTop(inputCanvas,face);
       coverage=(chin-headTop)/inputCanvas.height;
-      centerOffset=Math.abs((face.bbox.x+face.bbox.w/2)/inputCanvas.width-.5);
       headTopRatio=headTop/inputCanvas.height;
 
       add(
@@ -4459,12 +5055,6 @@
         `${Math.round(coverage*100)}%`,
         qualityStatusByRange(coverage,.70,.80,.65,.84),
         '目標 70%～80%'
-      );
-      add(
-        'center','人臉置中',
-        `偏移 ${Math.round(centerOffset*100)}%`,
-        centerOffset<=.04?'pass':centerOffset<=.08?'warn':'fail',
-        '水平中心偏移越小越好'
       );
       add(
         'tilt','臉部歪斜',
@@ -4475,14 +5065,14 @@
       add(
         'headTop','頭頂留白',
         `${Math.round(headTopRatio*100)}%`,
-        headTopRatio>=.015&&headTopRatio<=.13?'pass':
-          headTopRatio>=0&&headTopRatio<=.18?'warn':'fail',
-        '避免切到頭頂或留白過多'
+        headTopRatio>=.03&&headTopRatio<=.08?'pass':
+          headTopRatio>=.01&&headTopRatio<=.12?'warn':'fail',
+        'V14 目標約 5%～6%；避免像舊流程一樣上方留白過多'
       );
     }else{
       add('coverage','頭頂至下顎比例','無法判斷','fail','未偵測到臉部');
-      add('center','人臉置中','無法判斷','fail','未偵測到臉部');
       add('tilt','臉部歪斜','無法判斷','fail','未偵測到臉部');
+      add('headTop','頭頂留白','無法判斷','fail','未偵測到臉部');
     }
 
     // 2.1 × 2.3 cm at 300 dpi ≈ 248 × 272 px.
@@ -4519,7 +5109,7 @@
     const status=failCount ? 'fail' : warnCount ? 'warn' : 'pass';
     const score=Math.max(0,100-failCount*18-warnCount*7);
 
-    return {status,score,checks,faces:faces.length,tilt,coverage,centerOffset,background:bg};
+    return {status,score,checks,faces:faces.length,tilt,coverage,headTopRatio,background:bg};
   }
 
   function renderQualityResult(result){
@@ -4539,6 +5129,7 @@
     for(const item of result.checks){
       const row=document.createElement('div');
       row.className='quality-row';
+      row.dataset.qualityKey=item.key;
       const icon=document.createElement('span');
       icon.className=`quality-icon ${item.status}`;
       icon.textContent=item.status==='pass'?'✓':item.status==='warn'?'⚠':'✕';
@@ -5318,6 +5909,118 @@
 
   $('singleModeBtn').onclick=()=>switchEditorMode('single');
   $('batchModeBtn').onclick=()=>switchEditorMode('batch');
+  $('scanModeBtn').onclick=()=>switchEditorMode('scan');
+
+  $('scanOpenBtn').onclick=()=>$('scanFileInput').click();
+  $('scanFileInput').addEventListener('change',async ev=>{
+    await addScanPages(ev.target.files);
+    ev.target.value='';
+  });
+
+  $('scanDetectBtn').onclick=detectCurrentScanPage;
+  $('scanDetectAllBtn').onclick=detectAllScanPages;
+
+  $('scanManualBoxBtn').onclick=()=>{
+    if(!scanCurrentPage()) return;
+    scanManualBoxMode=!scanManualBoxMode;
+    scanDragStart=null;
+    scanDragCurrent=null;
+    $('scanManualBoxBtn').classList.toggle('active',scanManualBoxMode);
+    $('scanManualBoxBtn').textContent=scanManualBoxMode?'取消手動框':'＋ 手動新增框';
+    scanOverlay.style.cursor=scanManualBoxMode?'crosshair':'default';
+    drawScanOverlay();
+  };
+
+  $('scanDeleteBoxBtn').onclick=()=>{
+    const page=scanCurrentPage();
+    if(!page||scanSelectedCandidateId==null) return;
+    page.candidates=page.candidates.filter(c=>c.id!==scanSelectedCandidateId);
+    scanSelectedCandidateId=null;
+    renderScanCandidateList();
+    drawScanOverlay();
+    renderScanPagesList();
+    updateScanButtons();
+  };
+
+  $('scanSelectAllBtn').onclick=()=>{
+    const page=scanCurrentPage();
+    if(!page) return;
+    const shouldEnable=page.candidates.some(c=>!c.enabled);
+    page.candidates.forEach(c=>c.enabled=shouldEnable);
+    renderScanCandidateList();
+    drawScanOverlay();
+    updateScanButtons();
+  };
+
+  $('scanSplitBtn').onclick=()=>splitScanCandidates({standardize:false});
+  $('scanSplitStandardizeBtn').onclick=()=>splitScanCandidates({standardize:true});
+
+  scanOverlay.addEventListener('pointerdown',ev=>{
+    const page=scanCurrentPage();
+    if(!page) return;
+    const p=scanPointerToOriginal(ev);
+
+    if(scanManualBoxMode){
+      scanDragStart=p;
+      scanDragCurrent=p;
+      try{scanOverlay.setPointerCapture(ev.pointerId);}catch{}
+      drawScanOverlay();
+      return;
+    }
+
+    const hit=scanCandidateAtPoint(p);
+    scanSelectedCandidateId=hit?.id ?? null;
+    renderScanCandidateList();
+    drawScanOverlay();
+    updateScanButtons();
+  });
+
+  scanOverlay.addEventListener('pointermove',ev=>{
+    if(!scanManualBoxMode||!scanDragStart) return;
+    scanDragCurrent=scanPointerToOriginal(ev);
+    drawScanOverlay();
+  });
+
+  scanOverlay.addEventListener('pointerup',ev=>{
+    if(!scanManualBoxMode||!scanDragStart) return;
+    const page=scanCurrentPage();
+    const img=page?.image;
+    const p=scanPointerToOriginal(ev);
+    const x=Math.min(scanDragStart.x,p.x);
+    const y=Math.min(scanDragStart.y,p.y);
+    const w=Math.abs(p.x-scanDragStart.x);
+    const h=Math.abs(p.y-scanDragStart.y);
+
+    if(page&&img&&w>25&&h>30){
+      const candidate={
+        id:scanCandidateSeq++,
+        rect:scanClampRect({x,y,w,h},img.naturalWidth,img.naturalHeight),
+        enabled:true,
+        source:'manual'
+      };
+      page.candidates.push(candidate);
+      sortScanCandidates(page.candidates);
+      scanSelectedCandidateId=candidate.id;
+    }
+
+    scanDragStart=null;
+    scanDragCurrent=null;
+    scanManualBoxMode=false;
+    $('scanManualBoxBtn').classList.remove('active');
+    $('scanManualBoxBtn').textContent='＋ 手動新增框';
+    scanOverlay.style.cursor='default';
+    renderScanCandidateList();
+    renderScanPagesList();
+    drawScanOverlay();
+    updateScanButtons();
+  });
+
+  window.addEventListener('resize',()=>{
+    if(editorMode==='scan'&&scanCurrentPage()){
+      clearTimeout(window.__scanResizeTimer);
+      window.__scanResizeTimer=setTimeout(()=>renderScanPage(),120);
+    }
+  });
 
   $('openBtn').onclick=()=>{
     if(editorMode==='batch') batchFileInput.click();
