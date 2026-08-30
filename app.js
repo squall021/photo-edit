@@ -1086,6 +1086,7 @@
   const scanCanvasWrap = $('scanCanvasWrap');
   const scanEmpty = $('scanEmpty');
   const scanStage = $('scanStage');
+  const scanDropOverlay = $('scanDropOverlay');
 
   const source = document.createElement('canvas');
   const sctx = source.getContext('2d', { willReadFrequently: true });
@@ -2002,12 +2003,17 @@
     let estLeft=Math.max(0, rawLeft-sidePad);
     let estRight=Math.min(pageW, rawRight+sidePad);
 
-    // 底部利用衣服色塊結束位置推估，僅做收邊。
+    // V14.2.4：底部不再取「最後一個有深色像素的 row」，
+    // 因為會員編號 / 姓名 / 手寫字也會被視為深色內容。
+    // 改成尋找「肩膀／衣服的連續色塊區段」，遇到明顯空白間隔即停止，
+    // 讓後面的文字列不會重新把候選框往下拉。
     const x1=Math.floor(Math.max(0,estLeft+faceBox.w*0.08)*s);
     const x2=Math.ceil(Math.min(pageW,estRight-faceBox.w*0.08)*s);
     const rowScores=[];
     const yVals=[];
-    for(let y=Math.floor(roi.y1*s); y<=Math.ceil(Math.min(pageH,faceBox.y+faceBox.h*2.45)*s); y+=2){
+    const bottomSearchEnd=Math.min(pageH,faceBox.y+faceBox.h*2.55);
+
+    for(let y=Math.floor(roi.y1*s); y<=Math.ceil(bottomSearchEnd*s); y+=2){
       let hits=0,total=0;
       for(let x=x1; x<=x2; x+=2){
         if(isLikelyForegroundPixel(assist,x,y)) hits++;
@@ -2016,12 +2022,57 @@
       rowScores.push(total?hits/total:0);
       yVals.push(y/s);
     }
+
     const rowSmooth=smoothNumericSeries(rowScores,2);
-    let lastActive=-1;
-    for(let i=0;i<rowSmooth.length;i++) if(rowSmooth[i]>=0.07) lastActive=i;
+    const expectedShoulderY=faceBox.y+faceBox.h*1.18;
+    let seed=-1,bestSeedDist=Infinity;
+
+    // 衣服／肩膀橫向占比通常遠高於文字列。
+    for(let i=0;i<rowSmooth.length;i++){
+      if(rowSmooth[i]<.15) continue;
+      const d=Math.abs(yVals[i]-expectedShoulderY);
+      if(d<bestSeedDist){
+        bestSeedDist=d;
+        seed=i;
+      }
+    }
+
     let estBottom=null;
-    if(lastActive>=0){
-      estBottom=Math.min(pageH, yVals[lastActive]+faceBox.h*0.16);
+    let bottomConfidence=0;
+
+    if(seed>=0){
+      let end=seed;
+      let gap=0;
+      let strongRows=0;
+
+      for(let i=seed;i<rowSmooth.length;i++){
+        const score=rowSmooth[i];
+
+        if(score>=.075){
+          end=i;
+          gap=0;
+          if(score>=.15) strongRows++;
+          continue;
+        }
+
+        // 只允許極短空隙；一旦出現連續白區，就視為照片內容結束。
+        gap++;
+        if(gap<=2){
+          end=i;
+          continue;
+        }
+        break;
+      }
+
+      const clothingEnd=yVals[Math.max(seed,end)];
+      estBottom=Math.min(
+        pageH,
+        clothingEnd+faceBox.h*.10
+      );
+      bottomConfidence=Math.min(
+        1,
+        .35+strongRows/Math.max(4,(end-seed+1))*.65
+      );
     }
 
     return {
@@ -2029,6 +2080,7 @@
       left:estLeft,
       right:estRight,
       bottom:estBottom,
+      bottomConfidence,
       confidence:Math.max(0,Math.min(1,avgScore*3.8)),
       contentWidth,
       avgScore
@@ -2490,10 +2542,27 @@
       row.className='scan-page-item'+(index===scanPageIndex?' active':'');
       row.dataset.index=index;
 
+      const thumbWrap=document.createElement('div');
+      thumbWrap.className='scan-page-thumb-wrap';
+
       const img=document.createElement('img');
       img.className='scan-page-thumb';
       img.src=page.thumbUrl;
       img.alt='';
+
+      const removeBtn=document.createElement('button');
+      removeBtn.className='scan-page-remove';
+      removeBtn.type='button';
+      removeBtn.title='移除此掃描頁';
+      removeBtn.setAttribute('aria-label',`移除 ${page.file.name}`);
+      removeBtn.textContent='🗑';
+      removeBtn.addEventListener('click',async ev=>{
+        ev.preventDefault();
+        ev.stopPropagation();
+        await removeScanPage(index);
+      });
+
+      thumbWrap.append(img,removeBtn);
 
       const info=document.createElement('div');
       const name=document.createElement('div');
@@ -2508,7 +2577,7 @@
         : '尚未偵測';
 
       info.append(name,state);
-      row.append(img,info);
+      row.append(thumbWrap,info);
       row.addEventListener('click',()=>loadScanPage(index));
       scanPagesList.appendChild(row);
     });
@@ -2608,6 +2677,7 @@
 
     $('scanDetectBtn').disabled=!hasPage;
     $('scanDetectAllBtn').disabled=!scanPages.length;
+    $('scanClearPagesBtn').disabled=!scanPages.length;
     $('scanManualBoxBtn').disabled=!hasPage;
     $('scanSelectAllBtn').disabled=!hasPage || !(page?.candidates?.length);
     $('scanDeleteBoxBtn').disabled=!hasPage || scanSelectedCandidateId==null;
@@ -2722,6 +2792,75 @@
       p.y>=c.rect.y&&p.y<=c.rect.y+c.rect.h
     );
     return hits.sort((a,b)=>a.rect.w*a.rect.h-b.rect.w*b.rect.h)[0] || null;
+  }
+
+  function releaseScanPage(page){
+    if(!page) return;
+    try{
+      if(page.thumbUrl) URL.revokeObjectURL(page.thumbUrl);
+    }catch{}
+    page.image=null;
+    page.candidates=[];
+  }
+
+  async function removeScanPage(index){
+    if(index<0||index>=scanPages.length) return;
+
+    const wasCurrent=index===scanPageIndex;
+    const page=scanPages[index];
+    releaseScanPage(page);
+    scanPages.splice(index,1);
+
+    if(!scanPages.length){
+      scanPageIndex=-1;
+      scanSelectedCandidateId=null;
+      scanManualBoxMode=false;
+      scanDragStart=null;
+      scanDragCurrent=null;
+      $('scanManualBoxBtn').classList.remove('active');
+      $('scanManualBoxBtn').textContent='＋ 手動新增框';
+      scanSetProgress('已移除掃描頁。可重新加入或拖曳新的掃描圖片。');
+      renderScanPagesList();
+      await renderScanPage();
+      updateScanButtons();
+      return;
+    }
+
+    if(wasCurrent){
+      const nextIndex=Math.min(index,scanPages.length-1);
+      scanPageIndex=-1;
+      await loadScanPage(nextIndex);
+    }else{
+      if(index<scanPageIndex) scanPageIndex--;
+      renderScanPagesList();
+      updateScanButtons();
+    }
+  }
+
+  async function clearAllScanPages(){
+    if(!scanPages.length) return;
+    if(!window.confirm(`確定要移除全部 ${scanPages.length} 個掃描頁嗎？`)) return;
+
+    for(const page of scanPages) releaseScanPage(page);
+    scanPages=[];
+    scanPageIndex=-1;
+    scanSelectedCandidateId=null;
+    scanManualBoxMode=false;
+    scanDragStart=null;
+    scanDragCurrent=null;
+
+    $('scanManualBoxBtn').classList.remove('active');
+    $('scanManualBoxBtn').textContent='＋ 手動新增框';
+    scanSetProgress('已移除全部掃描頁。');
+    renderScanPagesList();
+    await renderScanPage();
+    updateScanButtons();
+  }
+
+  function scanFilesFromDataTransfer(dataTransfer){
+    if(!dataTransfer) return [];
+    return [...(dataTransfer.files||[])]
+      .filter(file=>file?.type?.startsWith('image/'));
   }
 
   async function loadScanPage(index){
@@ -6992,6 +7131,53 @@
   $('scanFileInput').addEventListener('change',async ev=>{
     await addScanPages(ev.target.files);
     ev.target.value='';
+  });
+
+  $('scanClearPagesBtn').onclick=clearAllScanPages;
+
+  let scanDragDepth=0;
+
+  scanWorkspace.addEventListener('dragenter',ev=>{
+    if(!ev.dataTransfer?.types?.includes('Files')) return;
+    ev.preventDefault();
+    scanDragDepth++;
+    scanStage.classList.add('drag-over');
+    scanDropOverlay.hidden=false;
+  });
+
+  scanWorkspace.addEventListener('dragover',ev=>{
+    if(!ev.dataTransfer?.types?.includes('Files')) return;
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect='copy';
+    scanStage.classList.add('drag-over');
+    scanDropOverlay.hidden=false;
+  });
+
+  scanWorkspace.addEventListener('dragleave',ev=>{
+    if(!ev.dataTransfer?.types?.includes('Files')) return;
+    scanDragDepth=Math.max(0,scanDragDepth-1);
+    if(scanDragDepth===0){
+      scanStage.classList.remove('drag-over');
+      scanDropOverlay.hidden=true;
+    }
+  });
+
+  scanWorkspace.addEventListener('drop',async ev=>{
+    if(!ev.dataTransfer?.files?.length) return;
+    ev.preventDefault();
+    scanDragDepth=0;
+    scanStage.classList.remove('drag-over');
+    scanDropOverlay.hidden=true;
+
+    const files=scanFilesFromDataTransfer(ev.dataTransfer);
+    if(!files.length){
+      scanSetProgress('拖曳的檔案不是支援的圖片格式。');
+      return;
+    }
+
+    const before=scanPages.length;
+    await addScanPages(files);
+    scanSetProgress(`已拖曳加入 ${scanPages.length-before} 個掃描頁。`);
   });
 
   $('scanDetectBtn').onclick=detectCurrentScanPage;

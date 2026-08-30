@@ -4,8 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <meta name="referrer" content="no-referrer" />
-<title>會員照片標準化工作站 V14.2.3</title>
-<link rel="stylesheet" href="./style.css?v=14.2.3" />
+<title>會員照片標準化工作站 V14.2.4</title>
+<link rel="stylesheet" href="./style.css?v=14.2.4" />
 </head>
 <body>
 <div class="app desktop-app" id="app">
@@ -20,7 +20,7 @@
         <button id="scanModeBtn" type="button">掃描表拆圖</button>
       </div>
 
-      <a id="helpBtn" class="help-btn" href="./help.html?v=14.2.3" target="_blank" rel="noopener noreferrer">❓ 操作教學</a>
+      <a id="helpBtn" class="help-btn" href="./help.html?v=14.2.4" target="_blank" rel="noopener noreferrer">❓ 操作教學</a>
 
       <div id="faceModelStatus" class="model-status loading" title="MediaPipe Face Landmarker 狀態">
         <span class="model-dot"></span>
@@ -145,6 +145,11 @@
           <input id="scanFileInput" type="file" accept="image/*" multiple hidden />
           <button id="scanDetectBtn" type="button" disabled>偵測目前頁</button>
           <button id="scanDetectAllBtn" type="button" disabled>偵測全部頁</button>
+          <button id="scanClearPagesBtn" class="danger-soft" type="button" disabled>🗑 移除全部掃描頁</button>
+        </div>
+
+        <div class="scan-drop-mini">
+          也可直接把 JPG / PNG 拖曳到此頁加入
         </div>
 
         <div id="scanPagesList" class="scan-pages-list"></div>
@@ -165,9 +170,15 @@
         </div>
 
         <div id="scanStage" class="scan-stage">
+          <div id="scanDropOverlay" class="scan-drop-overlay" hidden>
+            <div class="scan-drop-overlay-icon">＋</div>
+            <strong>放開滑鼠加入掃描頁</strong>
+            <span>支援一次拖曳多張 JPG / PNG</span>
+          </div>
           <div id="scanEmpty" class="scan-empty">
             <div style="font-size:44px">📄</div>
             加入會員申請表掃描圖
+            <div class="small" style="margin-top:6px">可按左側按鈕，或直接拖曳圖片到此區域</div>
           </div>
           <div id="scanCanvasWrap" class="scan-canvas-wrap" hidden>
             <canvas id="scanCanvas"></canvas>
@@ -539,6 +550,6 @@
 
 
 
-<script type="module" src="./app.js?v=14.2.3"></script>
+<script type="module" src="./app.js?v=14.2.4"></script>
 </body>
 </html>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>會員照片標準化工作站 V14.2.3｜操作教學</title>
+<title>會員照片標準化工作站 V14.2.4｜操作教學</title>
 <style>
 :root{
   --bg:#f3f6fb;
@@ -256,7 +256,7 @@ th{background:#f8fafc}
 
 <header class="topbar">
   <div class="brand">
-    <strong>會員照片標準化工作站 V14.2.3</strong>
+    <strong>會員照片標準化工作站 V14.2.4</strong>
     <span>操作教學與批次處理說明</span>
   </div>
   <div class="top-actions">
@@ -358,10 +358,24 @@ th{background:#f8fafc}
       </div>
 
       <div class="callout green">
-        V14.2.3 進一步處理「臉抓對，但單邊候選框拉太遠」的情況：
+        V14.2.4 進一步處理「臉抓對，但單邊候選框拉太遠」的情況：
         四邊加入最大延伸距離，並搜尋人臉附近的紙本照片邊緣；
         如果某一側出現大面積純白空白會自動收邊，同一掃描頁中尺寸明顯偏大的候選框
         也會依本頁中位尺寸修正。V14.2.1 的鄰臉、格線與拆分後多臉檢查仍全部保留。
+      </div>
+    </section>
+
+
+    <section class="section" id="scan-page-manage">
+      <h2>掃描頁加入與管理</h2>
+      <ul>
+        <li>除了按「＋ 加入掃描頁」，V14.2.4 也支援直接把一張或多張 JPG / PNG 拖曳到「掃描表拆圖」工作區。</li>
+        <li>每個掃描頁縮圖右下角都有垃圾桶圖示，可單獨移除該頁。</li>
+        <li>左側新增「移除全部掃描頁」，可一次清空目前加入的掃描頁。</li>
+      </ul>
+      <div class="callout green">
+        V14.2.4 的下邊界也改成追蹤「肩膀／衣服連續色塊」的結束位置；
+        遇到衣服與會員編號／姓名之間的空白帶就停止，不會再因下面的文字重新把候選框往下拉。
       </div>
     </section>
 
@@ -643,7 +657,7 @@ th{background:#f8fafc}
     <div class="footer">
       會員照片標準化工作站 V13 操作教學｜與圖片編輯器放在同一個 GitHub Pages 專案即可
     </div>
-        <div class="callout green">V14.2.3 新增下半部衣服／肩膀導向收邊。</div>
+        <div class="callout green">V14.2.4 新增下半部衣服／肩膀導向收邊。</div>
     </main>
 </div>
 </body>
