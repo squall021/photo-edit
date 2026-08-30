@@ -2047,6 +2047,211 @@
     };
   }
 
+  function rowForegroundRatio(assist,x1,x2,y,bandH){
+    if(!assist) return 0;
+    const s=assist.scale;
+    const ax=Math.max(0,Math.floor(x1*s));
+    const bx=Math.min(assist.width-1,Math.ceil(x2*s));
+    const ay=Math.max(0,Math.floor((y-bandH/2)*s));
+    const by=Math.min(assist.height-1,Math.ceil((y+bandH/2)*s));
+    let hits=0,total=0;
+    for(let yy=ay;yy<=by;yy+=2){
+      for(let x=ax;x<=bx;x+=2){
+        if(isLikelyForegroundPixel(assist,x,yy)) hits++;
+        total++;
+      }
+    }
+    return total?hits/total:0;
+  }
+
+  function rowFragmentationScore(assist,x1,x2,y,bandH){
+    if(!assist) return 0;
+    const s=assist.scale;
+    const ax=Math.max(0,Math.floor(x1*s));
+    const bx=Math.min(assist.width-1,Math.ceil(x2*s));
+    const ay=Math.max(0,Math.floor((y-bandH/2)*s));
+    const by=Math.min(assist.height-1,Math.ceil((y+bandH/2)*s));
+
+    let transitions=0,samples=0;
+    for(let yy=ay;yy<=by;yy+=2){
+      let prev=null;
+      for(let x=ax;x<=bx;x+=2){
+        const fg=isLikelyForegroundPixel(assist,x,yy);
+        if(prev!==null && fg!==prev) transitions++;
+        prev=fg;
+        samples++;
+      }
+    }
+    return samples?transitions/samples:0;
+  }
+
+  function horizontalBoundaryStrength(assist,x1,x2,y){
+    if(!assist) return 0;
+    const raw=scanLineEdgeScore(assist,'y',y,x1,x2);
+    // scanLineEdgeScore 回傳平均灰階跳變；約 18~30 已算明顯。
+    return Math.max(0,Math.min(1,(raw-10)/28));
+  }
+
+  function findBottomStructureBoundary(assist,faceBox,left,right,startY,endY){
+    if(!assist || endY<=startY) return null;
+
+    const step=Math.max(2,faceBox.h*.035);
+    const bandH=Math.max(4,faceBox.h*.09);
+    const rows=[];
+
+    for(let y=startY;y<=endY;y+=step){
+      rows.push({
+        y,
+        fg:rowForegroundRatio(assist,left,right,y,bandH),
+        frag:rowFragmentationScore(assist,left,right,y,bandH),
+        text:rowTextLikeScore(assist,left,right,y,bandH),
+        line:horizontalBoundaryStrength(assist,left,right,y)
+      });
+    }
+    if(rows.length<5) return null;
+
+    // 先確認已經進入肩膀 / 衣服的連續內容區。
+    let clothingSeed=-1;
+    for(let i=0;i<rows.length;i++){
+      const a=rows[i];
+      const b=rows[Math.min(rows.length-1,i+1)];
+      if(a.fg>=.12 && b.fg>=.10){
+        clothingSeed=i;
+        break;
+      }
+    }
+    if(clothingSeed<0) return null;
+
+    let best=null;
+
+    for(let i=clothingSeed+2;i<rows.length-2;i++){
+      const prev=rows[i-1];
+      const cur=rows[i];
+      const next=rows[i+1];
+      const next2=rows[i+2];
+
+      // A. 照片內容後出現空白帶：
+      // 上方仍有大片連續內容，接著 foreground 明顯下降。
+      const contentBefore=
+        (rows[Math.max(clothingSeed,i-2)].fg + prev.fg)/2;
+      const gapNow=(cur.fg+next.fg)/2;
+
+      const whitespaceTransition=
+        contentBefore>=.09 &&
+        gapNow<=.045 &&
+        (contentBefore-gapNow)>=.055;
+
+      // B. 照片本身的水平底邊 / 表格線。
+      const strongHorizontalLine=
+        cur.line>=.34 &&
+        contentBefore>=.075;
+
+      // C. 空白帶後出現細碎文字。
+      const textAfterGap=
+        whitespaceTransition &&
+        (
+          next2.text>=.28 ||
+          next2.frag>=.075
+        );
+
+      if(!(strongHorizontalLine || whitespaceTransition || textAfterGap)){
+        continue;
+      }
+
+      let confidence=0;
+      if(whitespaceTransition) confidence+=.42;
+      if(strongHorizontalLine) confidence+=.34;
+      if(textAfterGap) confidence+=.24;
+
+      // 不允許在肩膀剛開始處過早截掉。
+      const safeY=faceBox.y+faceBox.h*1.48;
+      if(cur.y<safeY) continue;
+
+      const boundaryY=strongHorizontalLine
+        ? cur.y
+        : Math.max(safeY,cur.y-faceBox.h*.025);
+
+      if(!best || confidence>best.confidence){
+        best={
+          y:boundaryY,
+          confidence,
+          reason:strongHorizontalLine
+            ? '水平底邊'
+            : textAfterGap
+              ? '空白＋文字列'
+              : '內容轉空白'
+        };
+      }
+
+      // 第一個高信心結構轉換通常就是照片底部。
+      if(confidence>=.65) break;
+    }
+
+    return best;
+  }
+
+  function applyBottomStructureIsolation(rect,faceBox,assist,pageW,pageH){
+    if(!assist) return {rect,applied:false};
+
+    let left=rect.x;
+    let right=rect.x+rect.w;
+    let top=rect.y;
+    let bottom=rect.y+rect.h;
+
+    const safeBottom=faceBox.y+faceBox.h*1.52;
+    const hardMaxBottom=Math.min(
+      pageH,
+      faceBox.y+faceBox.h*2.10
+    );
+
+    // 即使沒有成功辨識文字，底部也不能無限延伸。
+    if(bottom>hardMaxBottom){
+      bottom=Math.max(safeBottom,hardMaxBottom);
+    }
+
+    const searchStart=Math.max(
+      safeBottom,
+      faceBox.y+faceBox.h*1.12
+    );
+    const searchEnd=Math.min(
+      bottom,
+      pageH,
+      faceBox.y+faceBox.h*2.28
+    );
+
+    const boundary=findBottomStructureBoundary(
+      assist,
+      faceBox,
+      left,
+      right,
+      searchStart,
+      searchEnd
+    );
+
+    if(boundary && boundary.y < bottom-faceBox.h*.035){
+      bottom=Math.max(safeBottom,boundary.y);
+      return {
+        rect:scanClampRect(
+          {x:left,y:top,w:right-left,h:bottom-top},
+          pageW,pageH
+        ),
+        applied:true,
+        reason:boundary.reason,
+        confidence:boundary.confidence
+      };
+    }
+
+    return {
+      rect:scanClampRect(
+        {x:left,y:top,w:right-left,h:bottom-top},
+        pageW,pageH
+      ),
+      applied:false,
+      reason:'',
+      confidence:0
+    };
+  }
+
   function rowTextLikeScore(assist,x1,x2,y,bandH){
     if(!assist) return 0;
     const s=assist.scale;
@@ -2546,6 +2751,11 @@
     );
     rect=textIsolation.rect;
 
+    const bottomStructure=applyBottomStructureIsolation(
+      rect,b,localEdgeAssist,pageW,pageH
+    );
+    rect=bottomStructure.rect;
+
     const trimmed=trimExcessWhitespace(
       rect,b,localEdgeAssist,pageW,pageH
     );
@@ -2572,6 +2782,9 @@
       lightClothingConfidence:lightClothing.light?.confidence||0,
       textRowIsolated:textIsolation.applied,
       textRowScore:textIsolation.score||0,
+      bottomStructureIsolated:bottomStructure.applied,
+      bottomStructureReason:bottomStructure.reason||'',
+      bottomStructureConfidence:bottomStructure.confidence||0,
       whitespaceTrimmed:trimmed.trimmed,
       trimSides:trimmed.trimSides,
       multiFaceRisk:otherCentersInside>0,
@@ -2745,6 +2958,9 @@
         lightClothingConfidence:smart.lightClothingConfidence,
         textRowIsolated:smart.textRowIsolated,
         textRowScore:smart.textRowScore,
+        bottomStructureIsolated:smart.bottomStructureIsolated,
+        bottomStructureReason:smart.bottomStructureReason,
+        bottomStructureConfidence:smart.bottomStructureConfidence,
         whitespaceTrimmed:smart.whitespaceTrimmed,
         trimSides:smart.trimSides,
         multiFaceRisk:smart.multiFaceRisk,
@@ -2838,6 +3054,7 @@
         c.lowerContentGuided||
         c.lightClothingProtected||
         c.textRowIsolated||
+        c.bottomStructureIsolated||
         c.whitespaceTrimmed||
         c.sizeNormalized;
 
@@ -2872,6 +3089,11 @@
       if(c.lowerContentGuided) extras.push('衣服/肩膀');
       if(c.lightClothingProtected) extras.push('白衣保護');
       if(c.textRowIsolated) extras.push('文字隔離');
+      if(c.bottomStructureIsolated){
+        extras.push(c.bottomStructureReason
+          ? `底邊:${c.bottomStructureReason}`
+          : '底邊結構');
+      }
       if(c.whitespaceTrimmed) extras.push('去白邊');
       if(c.sizeNormalized) extras.push('尺寸修正');
       if(c.multiFaceRisk) extras.push('多臉風險');
