@@ -593,26 +593,79 @@
     const ratio=2.1/2.3;
     const targetHeadRatio=.75;
 
-    // V14：上下位置改成「頭頂優先定位」。
-    // 不再嘗試把臉放在畫面垂直中央；頭頂只保留約 5.5% 留白，
-    // 讓構圖接近實際會員照，而不是上方留下大面積空白。
+    // V14.2：頭頂留白真正鎖定在約 5.5%。
+    //
+    // 舊流程的問題：
+    //   1. 先用 headHeight / .75 算出大裁切框。
+    //   2. 如果框比來源影像寬，mpClampRect() 會縮小 w / h。
+    //   3. 但原本依「大框」算出的 y 並沒有同比例重算，
+    //      所以縮小後，頭頂留白比例可能從 5.5% 放大到 20% 以上。
+    //
+    // 新流程改成先算「實際放得進來源影像」的最終 cropH，
+    // 再用最終 cropH 計算 y，避免頭頂留白因縮框而變大。
     const topMarginRatio=.055;
 
-    let cropH=headHeight/targetHeadRatio;
-    let cropW=cropH*ratio;
+    const idealCropH=headHeight/targetHeadRatio;
 
-    // 左右仍維持基本水平置中，避免臉明顯偏左／偏右。
-    // 這只影響 X 軸，不會造成頭頂留白。
+    // 寬度限制：固定 21:23 時，裁切框不能比來源照片寬。
+    const maxHByWidth=inputCanvas.width/ratio;
+
+    // 底部限制：
+    // y = headTop - topMarginRatio * H
+    // y + H <= imageHeight
+    // => H <= (imageHeight - headTop) / (1 - topMarginRatio)
+    //
+    // 這樣在來源照片下方空間不足時，優先縮短裁切高度
+    // （讓頭部稍大一些），而不是把整個裁切框往上推，
+    // 因此不會製造額外的頭頂白邊。
+    const maxHByBottom=Math.max(
+      1,
+      (inputCanvas.height-headTop)/(1-topMarginRatio)
+    );
+
+    // 上方通常不會成為限制，但仍保護極端案例。
+    const maxHByTop=headTop>0
+      ? headTop/topMarginRatio
+      : idealCropH;
+
+    let cropH=Math.min(
+      idealCropH,
+      maxHByWidth,
+      maxHByBottom,
+      maxHByTop,
+      inputCanvas.height
+    );
+
+    // 不允許無效尺寸。
+    cropH=Math.max(1,cropH);
+    const cropW=cropH*ratio;
+
     const faceCenterX=(face.bbox.x+face.bbox.w/2);
 
-    let rect=mpClampRect({
-      x:faceCenterX-cropW/2,
-      y:headTop-cropH*topMarginRatio,
-      w:cropW,
-      h:cropH
-    },inputCanvas.width,inputCanvas.height);
+    // X 軸只做水平置中與邊界限制。
+    const x=Math.max(
+      0,
+      Math.min(
+        inputCanvas.width-cropW,
+        faceCenterX-cropW/2
+      )
+    );
+
+    // Y 軸由頭頂直接錨定。
+    // 只在數值誤差下做邊界保護，不再透過 mpClampRect 縮框。
+    const targetY=headTop-cropH*topMarginRatio;
+    const y=Math.max(
+      0,
+      Math.min(
+        inputCanvas.height-cropH,
+        targetY
+      )
+    );
+
+    const rect={x,y,w:cropW,h:cropH};
 
     const coverage=headHeight/rect.h;
+    const actualTopMargin=(headTop-rect.y)/rect.h;
     const faceAreaRatio=face.area/(inputCanvas.width*inputCanvas.height);
     const reliable=
       face.bbox.w>24 &&
@@ -626,6 +679,7 @@
       faceCoverage:coverage,
       headTop,
       chin,
+      topMarginRatio:actualTopMargin,
       reliable
     };
   }
@@ -843,7 +897,8 @@
     );
     const outBlob=await canvasToBlob(out,"image/jpeg",.97);
     return outBlob
-      ? {success:true,blob:outBlob,faceCoverage:suggestion.faceCoverage}
+      ? {success:true,blob:outBlob,faceCoverage:suggestion.faceCoverage,
+      topMarginRatio:suggestion.topMarginRatio}
       : {success:false,reason:"encode-failed"};
   }
 
@@ -881,7 +936,8 @@
           item.adjusted=true;
           item.done=false;
           item.autoCropped=true;
-          item.cropInfo=`MediaPipe 會員照 2.1 × 2.3 公分裁切，頭部約佔 ${Math.round(result.faceCoverage*100)}%`;
+          item.cropInfo=
+            `MediaPipe 會員照 2.1 × 2.3 公分裁切，頭部約 ${Math.round(result.faceCoverage*100)}%，頭頂留白約 ${Math.round((result.topMarginRatio||0)*100)}%`;
           success++;
         }else{
           item.cropInfo="自動裁切跳過：MediaPipe 未辨識到可靠臉部";
@@ -5162,7 +5218,7 @@
         `${Math.round(headTopRatio*100)}%`,
         headTopRatio>=.03&&headTopRatio<=.08?'pass':
           headTopRatio>=.01&&headTopRatio<=.12?'warn':'fail',
-        'V14 目標約 5%～6%；避免像舊流程一樣上方留白過多'
+        'V14.2 目標約 5%～6%；裁切框縮小時仍維持頭頂錨定'
       );
     }else{
       add('coverage','頭頂至下顎比例','無法判斷','fail','未偵測到臉部');
@@ -5353,7 +5409,9 @@
         return {success:false,reason:'無法可靠建立會員照裁切',canvas:working,notes};
       }
       working=cropCanvasBySourceRect(working,suggestion.rect);
-      notes.push(`會員照 2.1×2.3、頭部約 ${Math.round(suggestion.faceCoverage*100)}%`);
+      notes.push(
+        `會員照 2.1×2.3、頭部約 ${Math.round(suggestion.faceCoverage*100)}%、頭頂留白約 ${Math.round((suggestion.topMarginRatio||0)*100)}%`
+      );
     }
 
     if(preset.brighten){

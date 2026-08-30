@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>會員照片標準化工作站 V14.1｜操作教學</title>
+<title>會員照片標準化工作站 V14.2｜操作教學</title>
 <style>
 :root{
   --bg:#f3f6fb;
@@ -256,7 +256,7 @@ th{background:#f8fafc}
 
 <header class="topbar">
   <div class="brand">
-    <strong>會員照片標準化工作站 V14.1</strong>
+    <strong>會員照片標準化工作站 V14.2</strong>
     <span>操作教學與批次處理說明</span>
   </div>
   <div class="top-actions">
@@ -389,9 +389,9 @@ th{background:#f8fafc}
       <h2>✨ 一鍵會員照標準化</h2>
       <p>這是 V14 主要的會員照自動處理功能。</p>
       <div class="callout green">
-        V14 的自動裁切採「頭頂優先定位」：上下位置不再用人臉中心決定，
-        頭頂目標只保留約 5%～6% 留白；左右仍保留基本水平置中，避免臉偏向一側。
-        這可降低舊流程出現頭頂大面積白邊的情況。
+        V14.2 修正了裁切框縮小時的幾何問題。現在會先算出真正能放進原圖的最終
+        21:23 裁切尺寸，再以實際最終高度重新計算頭頂位置，因此即使原圖較窄、
+        或下方空間不足，頭頂留白仍會維持約 5%～6%，不會因為裁切框縮小而變成 20%～30%。
       </div>
 
       <div class="callout green">
