@@ -1082,3 +1082,13 @@ a.help-btn:hover{
   border-color:#fde68a;
   background:#fffdf5;
 }
+
+
+/* V14.2.2 候選框邊界精修 */
+.scan-candidate-item.refined{
+  box-shadow:inset 3px 0 0 #0ea5e9;
+}
+.scan-candidate-badge.refined{
+  background:#ecfeff;
+  color:#0e7490;
+}

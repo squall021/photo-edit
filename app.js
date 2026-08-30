@@ -1653,6 +1653,249 @@
     };
   }
 
+  function buildLocalEdgeAssist(img){
+    const maxSide=1600;
+    const scale=Math.min(1,maxSide/Math.max(img.naturalWidth,img.naturalHeight));
+    const c=document.createElement('canvas');
+    c.width=Math.max(1,Math.round(img.naturalWidth*scale));
+    c.height=Math.max(1,Math.round(img.naturalHeight*scale));
+    const ctx=c.getContext('2d',{willReadFrequently:true});
+    ctx.imageSmoothingEnabled=true;
+    ctx.imageSmoothingQuality='high';
+    ctx.drawImage(img,0,0,c.width,c.height);
+    const data=ctx.getImageData(0,0,c.width,c.height).data;
+    return {scale,width:c.width,height:c.height,data};
+  }
+
+  function localEdgeLuma(assist,x,y){
+    x=Math.max(0,Math.min(assist.width-1,Math.round(x)));
+    y=Math.max(0,Math.min(assist.height-1,Math.round(y)));
+    const i=(y*assist.width+x)*4;
+    const d=assist.data;
+    return d[i]*.2126+d[i+1]*.7152+d[i+2]*.0722;
+  }
+
+  function scanLineEdgeScore(assist,axis,pos,rangeStart,rangeEnd){
+    if(!assist) return 0;
+    const s=assist.scale;
+    let total=0,count=0;
+    if(axis==='x'){
+      const x=Math.round(pos*s);
+      if(x<2||x>=assist.width-2) return 0;
+      const y1=Math.max(0,Math.floor(rangeStart*s));
+      const y2=Math.min(assist.height-1,Math.ceil(rangeEnd*s));
+      for(let y=y1;y<=y2;y+=2){
+        total+=Math.abs(
+          localEdgeLuma(assist,x+2,y)-localEdgeLuma(assist,x-2,y)
+        );
+        count++;
+      }
+    }else{
+      const y=Math.round(pos*s);
+      if(y<2||y>=assist.height-2) return 0;
+      const x1=Math.max(0,Math.floor(rangeStart*s));
+      const x2=Math.min(assist.width-1,Math.ceil(rangeEnd*s));
+      for(let x=x1;x<=x2;x+=2){
+        total+=Math.abs(
+          localEdgeLuma(assist,x,y+2)-localEdgeLuma(assist,x,y-2)
+        );
+        count++;
+      }
+    }
+    return count?total/count:0;
+  }
+
+  function findLocalPhotoEdge(assist,axis,target,minPos,maxPos,spanStart,spanEnd){
+    if(!assist) return null;
+    const start=Math.floor(Math.min(minPos,maxPos));
+    const end=Math.ceil(Math.max(minPos,maxPos));
+    const step=Math.max(1,Math.round((end-start)/45));
+    let best=null,bestScore=0,bestDistance=Infinity;
+    for(let pos=start;pos<=end;pos+=step){
+      const score=scanLineEdgeScore(assist,axis,pos,spanStart,spanEnd);
+      if(score<16) continue;
+      const distance=Math.abs(pos-target);
+      if(score>bestScore+1.8 || (Math.abs(score-bestScore)<=1.8 && distance<bestDistance)){
+        best=pos; bestScore=score; bestDistance=distance;
+      }
+    }
+    return best!=null?{pos:best,score:bestScore}:null;
+  }
+
+  function scanRegionWhitespaceRatio(assist,rect){
+    if(!assist) return 0;
+    const s=assist.scale;
+    const x1=Math.max(0,Math.floor(rect.x*s));
+    const y1=Math.max(0,Math.floor(rect.y*s));
+    const x2=Math.min(assist.width,Math.ceil((rect.x+rect.w)*s));
+    const y2=Math.min(assist.height,Math.ceil((rect.y+rect.h)*s));
+    let white=0,total=0;
+    for(let y=y1;y<y2;y+=2){
+      for(let x=x1;x<x2;x+=2){
+        const i=(y*assist.width+x)*4,d=assist.data;
+        const r=d[i],g=d[i+1],b=d[i+2],a=d[i+3];
+        if(a<20) continue;
+        const mx=Math.max(r,g,b),mn=Math.min(r,g,b);
+        if(r>238&&g>238&&b>238&&(mx-mn)<18) white++;
+        total++;
+      }
+    }
+    return total?white/total:0;
+  }
+
+  function enforceMaxCandidateExtension(rect,faceBox,pageW,pageH){
+    let left=rect.x,right=rect.x+rect.w,top=rect.y,bottom=rect.y+rect.h;
+    let limited=false;
+
+    const maxLeft=faceBox.x-faceBox.w*.72;
+    const maxRight=faceBox.x+faceBox.w*1.72;
+    const maxTop=faceBox.y-faceBox.h*.52;
+    const maxBottom=faceBox.y+faceBox.h*2.02;
+
+    if(left<maxLeft){left=maxLeft;limited=true;}
+    if(right>maxRight){right=maxRight;limited=true;}
+    if(top<maxTop){top=maxTop;limited=true;}
+    if(bottom>maxBottom){bottom=maxBottom;limited=true;}
+
+    left=Math.min(left,faceBox.x-faceBox.w*.18);
+    right=Math.max(right,faceBox.x+faceBox.w*1.18);
+    top=Math.min(top,faceBox.y-faceBox.h*.28);
+    bottom=Math.max(bottom,faceBox.y+faceBox.h*1.58);
+
+    return {
+      rect:scanClampRect({x:left,y:top,w:right-left,h:bottom-top},pageW,pageH),
+      limited
+    };
+  }
+
+  function applyLocalPhotoEdgeSnap(rect,faceBox,assist,pageW,pageH){
+    if(!assist) return {rect,snapped:false,snapSides:[]};
+
+    let left=rect.x,right=rect.x+rect.w,top=rect.y,bottom=rect.y+rect.h;
+    const sides=[];
+    const v1=Math.max(0,faceBox.y-faceBox.h*.30);
+    const v2=Math.min(pageH,faceBox.y+faceBox.h*1.75);
+    const h1=Math.max(0,faceBox.x-faceBox.w*.25);
+    const h2=Math.min(pageW,faceBox.x+faceBox.w*1.25);
+
+    const l=findLocalPhotoEdge(assist,'x',left,
+      Math.max(0,left-faceBox.w*.40),
+      Math.min(faceBox.x-faceBox.w*.10,left+faceBox.w*.55),v1,v2);
+    if(l&&l.pos<faceBox.x-faceBox.w*.08){left=Math.max(left,l.pos);sides.push('左');}
+
+    const r=findLocalPhotoEdge(assist,'x',right,
+      Math.max(faceBox.x+faceBox.w*1.08,right-faceBox.w*.55),
+      Math.min(pageW,right+faceBox.w*.40),v1,v2);
+    if(r&&r.pos>faceBox.x+faceBox.w*1.08){right=Math.min(right,r.pos);sides.push('右');}
+
+    const t=findLocalPhotoEdge(assist,'y',top,
+      Math.max(0,top-faceBox.h*.35),
+      Math.min(faceBox.y-faceBox.h*.12,top+faceBox.h*.45),h1,h2);
+    if(t&&t.pos<faceBox.y-faceBox.h*.08){top=Math.max(top,t.pos);sides.push('上');}
+
+    const b=findLocalPhotoEdge(assist,'y',bottom,
+      Math.max(faceBox.y+faceBox.h*1.10,bottom-faceBox.h*.55),
+      Math.min(pageH,bottom+faceBox.h*.40),h1,h2);
+    if(b&&b.pos>faceBox.y+faceBox.h*1.08){bottom=Math.min(bottom,b.pos);sides.push('下');}
+
+    return {
+      rect:scanClampRect({x:left,y:top,w:right-left,h:bottom-top},pageW,pageH),
+      snapped:sides.length>0,
+      snapSides:[...new Set(sides)]
+    };
+  }
+
+  function trimExcessWhitespace(rect,faceBox,assist,pageW,pageH){
+    if(!assist) return {rect,trimmed:false,trimSides:[]};
+    let left=rect.x,right=rect.x+rect.w,top=rect.y,bottom=rect.y+rect.h;
+    const sides=[];
+    const safe={
+      left:faceBox.x-faceBox.w*.18,
+      right:faceBox.x+faceBox.w*1.18,
+      top:faceBox.y-faceBox.h*.28,
+      bottom:faceBox.y+faceBox.h*1.60
+    };
+
+    for(let i=0;i<4;i++){
+      const band=(bottom-top)*.18;
+      if(bottom-band<=safe.bottom) break;
+      const white=scanRegionWhitespaceRatio(assist,{x:left,y:bottom-band,w:right-left,h:band});
+      if(white<.86) break;
+      bottom-=band*.62;sides.push('下');
+    }
+    for(let i=0;i<3;i++){
+      const band=(bottom-top)*.18;
+      if(top+band>=safe.top) break;
+      const white=scanRegionWhitespaceRatio(assist,{x:left,y:top,w:right-left,h:band});
+      if(white<.88) break;
+      top+=band*.55;sides.push('上');
+    }
+
+    for(let i=0;i<3;i++){
+      const band=(right-left)*.18;
+      if(left+band>=safe.left) break;
+      const white=scanRegionWhitespaceRatio(assist,{x:left,y:top,w:band,h:bottom-top});
+      if(white<.90) break;
+      left+=band*.50;sides.push('左');
+    }
+
+    for(let i=0;i<3;i++){
+      const band=(right-left)*.18;
+      if(right-band<=safe.right) break;
+      const white=scanRegionWhitespaceRatio(assist,{x:right-band,y:top,w:band,h:bottom-top});
+      if(white<.90) break;
+      right-=band*.50;sides.push('右');
+    }
+
+    left=Math.min(left,safe.left);right=Math.max(right,safe.right);
+    top=Math.min(top,safe.top);bottom=Math.max(bottom,safe.bottom);
+    left=Math.max(0,left);top=Math.max(0,top);
+    right=Math.min(pageW,right);bottom=Math.min(pageH,bottom);
+
+    return {
+      rect:scanClampRect({x:left,y:top,w:right-left,h:bottom-top},pageW,pageH),
+      trimmed:sides.length>0,
+      trimSides:[...new Set(sides)]
+    };
+  }
+
+  function medianNumber(values){
+    const a=values.filter(Number.isFinite).sort((x,y)=>x-y);
+    if(!a.length) return 0;
+    const m=Math.floor(a.length/2);
+    return a.length%2?a[m]:(a[m-1]+a[m])/2;
+  }
+
+  function normalizeScanCandidateSizes(candidates,pageW,pageH){
+    if(candidates.length<4) return;
+    const medW=medianNumber(candidates.map(c=>c.rect.w));
+    const medH=medianNumber(candidates.map(c=>c.rect.h));
+    if(!medW||!medH) return;
+
+    for(const c of candidates){
+      const wr=c.rect.w/medW,hr=c.rect.h/medH;
+      if(wr<=1.38&&hr<=1.42) continue;
+      const b=c.faceBox;
+      if(!b) continue;
+
+      let tw=c.rect.w,th=c.rect.h;
+      if(wr>1.38) tw=Math.min(tw,medW*1.18);
+      if(hr>1.42) th=Math.min(th,medH*1.20);
+
+      const cx=b.x+b.w/2;
+      let x=Math.max(0,Math.min(pageW-tw,cx-tw/2));
+      let y=Math.max(0,Math.min(pageH-th,b.y-b.h*.40));
+
+      const safeRight=b.x+b.w*1.18;
+      const safeBottom=b.y+b.h*1.58;
+      if(x+tw<safeRight) x=Math.max(0,safeRight-tw);
+      if(y+th<safeBottom) y=Math.max(0,safeBottom-th);
+
+      c.rect=scanClampRect({x,y,w:tw,h:th},pageW,pageH);
+      c.sizeNormalized=true;
+    }
+  }
+
   function findScanGridBoundary(assist,axis,target,minPos,maxPos){
     if(!assist) return null;
     const scores=axis==='x' ? assist.vertical : assist.horizontal;
@@ -1683,7 +1926,14 @@
     return x>rect.x && x<rect.x+rect.w && y>rect.y && y<rect.y+rect.h;
   }
 
-  function scanCandidateRectFromFaceSmart(faceBox,allFaceBoxes,pageW,pageH,gridAssist=null){
+  function scanCandidateRectFromFaceSmart(
+    faceBox,
+    allFaceBoxes,
+    pageW,
+    pageH,
+    gridAssist=null,
+    localEdgeAssist=null
+  ){
     const b=faceBox;
     const cx=b.x+b.w/2;
     const cy=b.y+b.h/2;
@@ -1822,12 +2072,25 @@
     right=Math.min(pageW,right);
     bottom=Math.min(pageH,bottom);
 
-    const rect=scanClampRect({
+    let rect=scanClampRect({
       x:left,
       y:top,
       w:Math.max(1,right-left),
       h:Math.max(1,bottom-top)
     },pageW,pageH);
+
+    const limited=enforceMaxCandidateExtension(rect,b,pageW,pageH);
+    rect=limited.rect;
+
+    const snapped=applyLocalPhotoEdgeSnap(
+      rect,b,localEdgeAssist,pageW,pageH
+    );
+    rect=snapped.rect;
+
+    const trimmed=trimExcessWhitespace(
+      rect,b,localEdgeAssist,pageW,pageH
+    );
+    rect=trimmed.rect;
 
     // 最終風險檢查：框內是否仍包含其他人臉中心。
     const otherCentersInside=allFaceBoxes.filter(o=>{
@@ -1841,6 +2104,11 @@
       rect,
       constrained,
       gridAdjusted,
+      extensionLimited:limited.limited,
+      localEdgeSnapped:snapped.snapped,
+      snapSides:snapped.snapSides,
+      whitespaceTrimmed:trimmed.trimmed,
+      trimSides:trimmed.trimSides,
       multiFaceRisk:otherCentersInside>0,
       otherCentersInside
     };
@@ -1977,6 +2245,7 @@
     const faceBoxes=mergeScanFaceDetections(rawFaceBoxes);
     const auto=[];
     const gridAssist=buildScanGridAssist(img);
+    const localEdgeAssist=buildLocalEdgeAssist(img);
 
     for(const box of faceBoxes){
       if(box.w<18 || box.h<22) continue;
@@ -1986,7 +2255,8 @@
         faceBoxes,
         img.naturalWidth,
         img.naturalHeight,
-        gridAssist
+        gridAssist,
+        localEdgeAssist
       );
 
       // 這裡只去除真正近乎重複的同一人框；
@@ -2001,10 +2271,21 @@
         faceBox:box,
         constrained:smart.constrained,
         gridAdjusted:smart.gridAdjusted,
+        extensionLimited:smart.extensionLimited,
+        localEdgeSnapped:smart.localEdgeSnapped,
+        snapSides:smart.snapSides,
+        whitespaceTrimmed:smart.whitespaceTrimmed,
+        trimSides:smart.trimSides,
         multiFaceRisk:smart.multiFaceRisk,
         otherCentersInside:smart.otherCentersInside
       });
     }
+
+    normalizeScanCandidateSizes(
+      auto,
+      img.naturalWidth,
+      img.naturalHeight
+    );
 
     sortScanCandidates(auto);
 
@@ -2063,9 +2344,16 @@
 
     candidates.forEach((c,index)=>{
       const row=document.createElement('div');
+      const refined=
+        c.extensionLimited||
+        c.localEdgeSnapped||
+        c.whitespaceTrimmed||
+        c.sizeNormalized;
+
       row.className='scan-candidate-item'
         +(c.id===scanSelectedCandidateId?' active':'')
-        +(c.multiFaceRisk?' risk':'');
+        +(c.multiFaceRisk?' risk':'')
+        +(refined?' refined':'');
       row.dataset.id=c.id;
 
       const check=document.createElement('input');
@@ -2088,6 +2376,10 @@
       const extras=[];
       if(c.constrained) extras.push('鄰臉限制');
       if(c.gridAdjusted) extras.push('格線輔助');
+      if(c.extensionLimited) extras.push('延伸限制');
+      if(c.localEdgeSnapped) extras.push('照片邊緣');
+      if(c.whitespaceTrimmed) extras.push('去白邊');
+      if(c.sizeNormalized) extras.push('尺寸修正');
       if(c.multiFaceRisk) extras.push('多臉風險');
       meta.textContent=
         `${Math.round(c.rect.w)} × ${Math.round(c.rect.h)} px`
@@ -2096,12 +2388,20 @@
 
       const badge=document.createElement('span');
       badge.className='scan-candidate-badge'
-        +(c.multiFaceRisk?' review':c.source==='manual'?'':' safe');
+        +(c.multiFaceRisk
+          ? ' review'
+          : c.source==='manual'
+            ? ''
+            : refined
+              ? ' refined'
+              : ' safe');
       badge.textContent=c.source==='manual'
         ? '手動'
         : c.multiFaceRisk
           ? '需檢查'
-          : '安全框';
+          : refined
+            ? '已精修'
+            : '安全框';
 
       row.append(check,info,badge);
       row.addEventListener('click',()=>{
