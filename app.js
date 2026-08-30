@@ -7109,9 +7109,43 @@
     let transparent=false;
     const notes=[];
 
+    // V14.4：有去背需求的 Preset 改成第一步先處理背景。
+    // 實測先分離人物與背景後，後續頭頂 / 頭髮邊界分析通常更穩定。
+    if(preset.background){
+      const bg=analyzeBackgroundStats(working);
+      const needWhite=preset.background==='auto-white' && bg.whiteRatio<.87;
+
+      if(preset.background==='transparent'||needWhite){
+        progress(
+          preset.background==='transparent'
+            ? '第一步：人物去背（透明）…'
+            : '第一步：人物去背並轉成白底…'
+        );
+
+        working=await applyBackgroundToCanvas(
+          working,
+          preset.background==='transparent'?'transparent':'white',
+          1.2
+        );
+
+        transparent=preset.background==='transparent';
+        notes.push(
+          transparent
+            ? '第一步：透明去背'
+            : '第一步：白底去背'
+        );
+      }else if(preset.background==='auto-white'){
+        // 已是白底時不必重新分割，但流程仍先完成背景判斷。
+        notes.push('第一步：原背景已接近純白，略過去背');
+      }
+    }
+
     if(preset.straighten){
       progress('分析雙眼位置並自動轉正…');
-      const s=await straightenCanvasMP(working);
+      const s=await straightenCanvasMP(
+        working,
+        {transparent}
+      );
       if(s.changed){
         working=s.canvas;
         notes.push(`轉正 ${Math.abs(s.angle).toFixed(1)}°`);
@@ -7124,7 +7158,13 @@
       progress('依會員照 2.1 × 2.3 公分規格建立裁切…');
       const suggestion=await suggestMemberPhotoCropRectMP(working);
       if(!suggestion?.reliable){
-        return {success:false,reason:'無法可靠建立會員照裁切',canvas:working,notes};
+        return {
+          success:false,
+          reason:'無法可靠建立會員照裁切',
+          canvas:working,
+          notes,
+          transparent
+        };
       }
       working=cropCanvasBySourceRect(working,suggestion.rect);
       notes.push(
@@ -7137,23 +7177,6 @@
       const b=applySmartBrightnessCanvas(working);
       working=b.canvas;
       notes.push(`智慧提亮：${b.adjustments.label}`);
-    }
-
-    if(preset.background){
-      const bg=analyzeBackgroundStats(working);
-      const needWhite=preset.background==='auto-white' && bg.whiteRatio<.87;
-      if(preset.background==='transparent'||needWhite){
-        progress(preset.background==='transparent'?'人物去背（透明）…':'背景非純白，正在轉成白底…');
-        working=await applyBackgroundToCanvas(
-          working,
-          preset.background==='transparent'?'transparent':'white',
-          1.2
-        );
-        transparent=preset.background==='transparent';
-        notes.push(transparent?'透明背景':'白色背景');
-      }else if(preset.background==='auto-white'){
-        notes.push('原背景已接近純白，略過去背');
-      }
     }
 
     if(preset.clean){
@@ -8778,7 +8801,8 @@
     });
   }
 
-  if($('singleInfoPanel')) $('singleInfoPanel').hidden=false;
+  if($('batchPanel')) $('batchPanel').hidden=editorMode!=='batch';
+  if($('singleInfoPanel')) $('singleInfoPanel').hidden=editorMode!=='single';
   app.classList.toggle('batch-active',editorMode==='batch');
   activateRibbonTab(editorMode==='batch' ? 'batch' : 'home');
 

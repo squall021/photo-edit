@@ -1220,3 +1220,21 @@ a.help-btn:hover{
   background:#f5f3ff;
   color:#6d28d9;
 }
+
+
+/* ============================================================
+   V14.4 — 單張 / 批次左側功能嚴格分離
+   ============================================================ */
+#batchPanel[hidden],
+#singleInfoPanel[hidden]{
+  display:none !important;
+}
+
+/* 即使瀏覽器對 hidden 屬性的 CSS 行為不同，也強制模式隔離。 */
+.desktop-app:not(.batch-active) #batchPanel{
+  display:none !important;
+}
+
+.desktop-app.batch-active #singleInfoPanel{
+  display:none !important;
+}
