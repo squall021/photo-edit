@@ -1122,6 +1122,10 @@
   let scanDragCurrent = null;
   let scanViewScale = 1;
   let scanRenderToken = 0;
+
+  // V14.3 candidate frame editing
+  let scanBoxEdit = null;
+  let scanHoverHandle = null;
   let sourceDirty = false;
   let smartSpots = [];
   let smartFaceRegion = null;
@@ -2944,6 +2948,7 @@
       auto.push({
         id:scanCandidateSeq++,
         rect:smart.rect,
+        initialRect:cloneScanRect(smart.rect),
         enabled:true,
         source:'auto',
         faceBox:box,
@@ -2973,6 +2978,11 @@
       img.naturalWidth,
       img.naturalHeight
     );
+
+    // Reset baseline after all automatic refinements.
+    auto.forEach(c=>{
+      c.initialRect=cloneScanRect(c.rect);
+    });
 
     sortScanCandidates(auto);
 
@@ -3061,7 +3071,8 @@
       row.className='scan-candidate-item'
         +(c.id===scanSelectedCandidateId?' active':'')
         +(c.multiFaceRisk?' risk':'')
-        +(refined?' refined':'');
+        +(refined?' refined':'')
+        +(c.manualAdjusted?' manual-adjusted':'');
       row.dataset.id=c.id;
 
       const check=document.createElement('input');
@@ -3096,6 +3107,7 @@
       }
       if(c.whitespaceTrimmed) extras.push('去白邊');
       if(c.sizeNormalized) extras.push('尺寸修正');
+      if(c.manualAdjusted) extras.push('手動調框');
       if(c.multiFaceRisk) extras.push('多臉風險');
       meta.textContent=
         `${Math.round(c.rect.w)} × ${Math.round(c.rect.h)} px`
@@ -3104,20 +3116,24 @@
 
       const badge=document.createElement('span');
       badge.className='scan-candidate-badge'
-        +(c.multiFaceRisk
-          ? ' review'
-          : c.source==='manual'
-            ? ''
+        +(c.manualAdjusted
+          ? ' manual-adjusted'
+          : c.multiFaceRisk
+            ? ' review'
+            : c.source==='manual'
+              ? ''
+              : refined
+                ? ' refined'
+                : ' safe');
+      badge.textContent=c.manualAdjusted
+        ? '已調整'
+        : c.source==='manual'
+          ? '手動'
+          : c.multiFaceRisk
+            ? '需檢查'
             : refined
-              ? ' refined'
-              : ' safe');
-      badge.textContent=c.source==='manual'
-        ? '手動'
-        : c.multiFaceRisk
-          ? '需檢查'
-          : refined
-            ? '已精修'
-            : '安全框';
+              ? '已精修'
+              : '安全框';
 
       row.append(check,info,badge);
       row.addEventListener('click',()=>{
@@ -3125,6 +3141,8 @@
         renderScanCandidateList();
         drawScanOverlay();
         updateScanButtons();
+        $('scanHint').textContent=
+          '拖曳框內可移動；拖曳四個角或四條邊的控制點可調整候選框。';
       });
       scanCandidatesList.appendChild(row);
     });
@@ -3142,6 +3160,10 @@
     $('scanDetectAllBtn').disabled=!scanPages.length;
     $('scanClearPagesBtn').disabled=!scanPages.length;
     $('scanManualBoxBtn').disabled=!hasPage;
+    $('scanResetBoxBtn').disabled=
+      !hasPage ||
+      scanSelectedCandidateId==null ||
+      !scanSelectedCandidate()?.initialRect;
     $('scanSelectAllBtn').disabled=!hasPage || !(page?.candidates?.length);
     $('scanDeleteBoxBtn').disabled=!hasPage || scanSelectedCandidateId==null;
     $('scanSplitBtn').disabled=!hasCandidates;
@@ -3190,6 +3212,168 @@
     updateScanButtons();
   }
 
+  function scanSelectedCandidate(){
+    const page=scanCurrentPage();
+    if(!page||scanSelectedCandidateId==null) return null;
+    return page.candidates.find(c=>c.id===scanSelectedCandidateId)||null;
+  }
+
+  function cloneScanRect(rect){
+    return {x:rect.x,y:rect.y,w:rect.w,h:rect.h};
+  }
+
+  function scanHandlePoints(rect){
+    const x1=rect.x,y1=rect.y,x2=rect.x+rect.w,y2=rect.y+rect.h;
+    const cx=(x1+x2)/2,cy=(y1+y2)/2;
+    return {
+      nw:{x:x1,y:y1},
+      n:{x:cx,y:y1},
+      ne:{x:x2,y:y1},
+      e:{x:x2,y:cy},
+      se:{x:x2,y:y2},
+      s:{x:cx,y:y2},
+      sw:{x:x1,y:y2},
+      w:{x:x1,y:cy}
+    };
+  }
+
+  function scanHandleCursor(handle){
+    return {
+      nw:'nwse-resize',
+      se:'nwse-resize',
+      ne:'nesw-resize',
+      sw:'nesw-resize',
+      n:'ns-resize',
+      s:'ns-resize',
+      e:'ew-resize',
+      w:'ew-resize',
+      move:'move'
+    }[handle]||'default';
+  }
+
+  function hitTestScanSelectedBox(p){
+    const c=scanSelectedCandidate();
+    if(!c) return null;
+
+    // Handles are a fixed screen size, converted back into original-image coords.
+    const tolerance=Math.max(5,8/Math.max(.05,scanViewScale));
+    const points=scanHandlePoints(c.rect);
+
+    for(const [name,h] of Object.entries(points)){
+      if(Math.abs(p.x-h.x)<=tolerance && Math.abs(p.y-h.y)<=tolerance){
+        return {type:'handle',handle:name,candidate:c};
+      }
+    }
+
+    if(
+      p.x>=c.rect.x&&p.x<=c.rect.x+c.rect.w&&
+      p.y>=c.rect.y&&p.y<=c.rect.y+c.rect.h
+    ){
+      return {type:'move',handle:'move',candidate:c};
+    }
+
+    return null;
+  }
+
+  function clampMovedScanRect(rect,dx,dy,pageW,pageH){
+    let x=rect.x+dx;
+    let y=rect.y+dy;
+    x=Math.max(0,Math.min(pageW-rect.w,x));
+    y=Math.max(0,Math.min(pageH-rect.h,y));
+    return {x,y,w:rect.w,h:rect.h};
+  }
+
+  function resizeScanRect(rect,handle,p,pageW,pageH){
+    let left=rect.x;
+    let top=rect.y;
+    let right=rect.x+rect.w;
+    let bottom=rect.y+rect.h;
+
+    const minW=Math.min(30,pageW);
+    const minH=Math.min(36,pageH);
+
+    if(handle.includes('w')) left=Math.max(0,Math.min(right-minW,p.x));
+    if(handle.includes('e')) right=Math.min(pageW,Math.max(left+minW,p.x));
+    if(handle.includes('n')) top=Math.max(0,Math.min(bottom-minH,p.y));
+    if(handle.includes('s')) bottom=Math.min(pageH,Math.max(top+minH,p.y));
+
+    return {
+      x:left,
+      y:top,
+      w:right-left,
+      h:bottom-top
+    };
+  }
+
+  function drawScanResizeHandles(candidate){
+    const points=scanHandlePoints(candidate.rect);
+    const size=9;
+    const half=size/2;
+
+    scanOctx.save();
+    scanOctx.setLineDash([]);
+    scanOctx.fillStyle='#fff';
+    scanOctx.strokeStyle='#f59e0b';
+    scanOctx.lineWidth=2;
+
+    for(const h of Object.values(points)){
+      const x=h.x*scanViewScale;
+      const y=h.y*scanViewScale;
+      scanOctx.fillRect(x-half,y-half,size,size);
+      scanOctx.strokeRect(x-half,y-half,size,size);
+    }
+
+    // A light translucent fill makes the selected box easier to drag.
+    const r=candidate.rect;
+    scanOctx.fillStyle='rgba(245,158,11,.055)';
+    scanOctx.fillRect(
+      r.x*scanViewScale,
+      r.y*scanViewScale,
+      r.w*scanViewScale,
+      r.h*scanViewScale
+    );
+    scanOctx.restore();
+  }
+
+  function updateScanOverlayCursor(ev=null){
+    if(scanManualBoxMode){
+      scanOverlay.style.cursor='crosshair';
+      return;
+    }
+    if(scanBoxEdit){
+      scanOverlay.style.cursor=scanHandleCursor(scanBoxEdit.handle);
+      return;
+    }
+    if(ev){
+      const hit=hitTestScanSelectedBox(scanPointerToOriginal(ev));
+      scanHoverHandle=hit?.handle||null;
+      scanOverlay.style.cursor=hit
+        ? scanHandleCursor(hit.handle)
+        : 'default';
+    }else{
+      scanOverlay.style.cursor='default';
+    }
+  }
+
+  function markScanCandidateAdjusted(candidate){
+    if(!candidate.manualAdjusted){
+      candidate.manualAdjusted=true;
+    }
+    candidate.lastManualRect=cloneScanRect(candidate.rect);
+  }
+
+  function resetSelectedScanCandidate(){
+    const c=scanSelectedCandidate();
+    if(!c||!c.initialRect) return;
+    c.rect=cloneScanRect(c.initialRect);
+    c.manualAdjusted=false;
+    c.lastManualRect=null;
+    renderScanCandidateList();
+    drawScanOverlay();
+    updateScanButtons();
+    scanSetProgress('已將選取候選框重設為自動偵測／建立時的範圍。');
+  }
+
   function drawScanOverlay(){
     if(!scanOverlay.width) return;
     scanOctx.clearRect(0,0,scanOverlay.width,scanOverlay.height);
@@ -3221,6 +3405,10 @@
       scanOctx.font='bold 12px Segoe UI, sans-serif';
       scanOctx.fillText(String(index+1).padStart(2,'0'),r.x+5,r.y+14);
       scanOctx.restore();
+
+      if(c.id===scanSelectedCandidateId){
+        drawScanResizeHandles(c);
+      }
     });
 
     if(scanManualBoxMode && scanDragStart && scanDragCurrent){
@@ -3311,6 +3499,8 @@
     scanManualBoxMode=false;
     scanDragStart=null;
     scanDragCurrent=null;
+    scanBoxEdit=null;
+    scanHoverHandle=null;
 
     $('scanManualBoxBtn').classList.remove('active');
     $('scanManualBoxBtn').textContent='＋ 手動新增框';
@@ -3333,6 +3523,8 @@
     scanManualBoxMode=false;
     scanDragStart=null;
     scanDragCurrent=null;
+    scanBoxEdit=null;
+    scanHoverHandle=null;
     $('scanManualBoxBtn').classList.remove('active');
     await renderScanPage();
   }
@@ -7657,6 +7849,8 @@
     drawScanOverlay();
   };
 
+  $('scanResetBoxBtn').onclick=resetSelectedScanCandidate;
+
   $('scanDeleteBoxBtn').onclick=()=>{
     const page=scanCurrentPage();
     if(!page||scanSelectedCandidateId==null) return;
@@ -7694,51 +7888,149 @@
       return;
     }
 
-    const hit=scanCandidateAtPoint(p);
-    scanSelectedCandidateId=hit?.id ?? null;
-    renderScanCandidateList();
-    drawScanOverlay();
-    updateScanButtons();
+    // Selected candidate handles / interior get first priority.
+    let editHit=hitTestScanSelectedBox(p);
+
+    if(!editHit){
+      const hit=scanCandidateAtPoint(p);
+      scanSelectedCandidateId=hit?.id ?? null;
+      renderScanCandidateList();
+      drawScanOverlay();
+      updateScanButtons();
+
+      if(hit){
+        $('scanHint').textContent=
+          '拖曳框內可移動；拖曳四個角或四條邊的控制點可調整候選框。';
+        editHit=hitTestScanSelectedBox(p);
+      }else{
+        $('scanHint').textContent=
+          '點選候選框後可拖曳調整；漏掉的照片也可用「手動新增框」。';
+      }
+    }
+
+    if(editHit){
+      const c=editHit.candidate;
+      scanBoxEdit={
+        candidateId:c.id,
+        handle:editHit.handle,
+        start:p,
+        originalRect:cloneScanRect(c.rect),
+        moved:false
+      };
+      try{scanOverlay.setPointerCapture(ev.pointerId);}catch{}
+      updateScanOverlayCursor();
+      ev.preventDefault();
+    }
   });
 
   scanOverlay.addEventListener('pointermove',ev=>{
-    if(!scanManualBoxMode||!scanDragStart) return;
-    scanDragCurrent=scanPointerToOriginal(ev);
-    drawScanOverlay();
+    if(scanManualBoxMode&&scanDragStart){
+      scanDragCurrent=scanPointerToOriginal(ev);
+      drawScanOverlay();
+      return;
+    }
+
+    if(scanBoxEdit){
+      const page=scanCurrentPage();
+      const img=page?.image;
+      const c=page?.candidates.find(x=>x.id===scanBoxEdit.candidateId);
+      if(!c||!img) return;
+
+      const p=scanPointerToOriginal(ev);
+      const dx=p.x-scanBoxEdit.start.x;
+      const dy=p.y-scanBoxEdit.start.y;
+
+      if(Math.hypot(dx,dy)>.75) scanBoxEdit.moved=true;
+
+      if(scanBoxEdit.handle==='move'){
+        c.rect=clampMovedScanRect(
+          scanBoxEdit.originalRect,
+          dx,dy,
+          img.naturalWidth,img.naturalHeight
+        );
+      }else{
+        c.rect=resizeScanRect(
+          scanBoxEdit.originalRect,
+          scanBoxEdit.handle,
+          p,
+          img.naturalWidth,img.naturalHeight
+        );
+      }
+
+      drawScanOverlay();
+      updateScanOverlayCursor();
+      ev.preventDefault();
+      return;
+    }
+
+    updateScanOverlayCursor(ev);
   });
 
   scanOverlay.addEventListener('pointerup',ev=>{
-    if(!scanManualBoxMode||!scanDragStart) return;
-    const page=scanCurrentPage();
-    const img=page?.image;
-    const p=scanPointerToOriginal(ev);
-    const x=Math.min(scanDragStart.x,p.x);
-    const y=Math.min(scanDragStart.y,p.y);
-    const w=Math.abs(p.x-scanDragStart.x);
-    const h=Math.abs(p.y-scanDragStart.y);
+    if(scanManualBoxMode&&scanDragStart){
+      const page=scanCurrentPage();
+      const img=page?.image;
+      const p=scanPointerToOriginal(ev);
+      const x=Math.min(scanDragStart.x,p.x);
+      const y=Math.min(scanDragStart.y,p.y);
+      const w=Math.abs(p.x-scanDragStart.x);
+      const h=Math.abs(p.y-scanDragStart.y);
 
-    if(page&&img&&w>25&&h>30){
-      const candidate={
-        id:scanCandidateSeq++,
-        rect:scanClampRect({x,y,w,h},img.naturalWidth,img.naturalHeight),
-        enabled:true,
-        source:'manual'
-      };
-      page.candidates.push(candidate);
-      sortScanCandidates(page.candidates);
-      scanSelectedCandidateId=candidate.id;
+      if(page&&img&&w>25&&h>30){
+        const rect=scanClampRect({x,y,w,h},img.naturalWidth,img.naturalHeight);
+        const candidate={
+          id:scanCandidateSeq++,
+          rect,
+          initialRect:cloneScanRect(rect),
+          enabled:true,
+          source:'manual'
+        };
+        page.candidates.push(candidate);
+        sortScanCandidates(page.candidates);
+        scanSelectedCandidateId=candidate.id;
+      }
+
+      scanDragStart=null;
+      scanDragCurrent=null;
+      scanManualBoxMode=false;
+      $('scanManualBoxBtn').classList.remove('active');
+      $('scanManualBoxBtn').textContent='＋ 手動新增框';
+      renderScanCandidateList();
+      renderScanPagesList();
+      drawScanOverlay();
+      updateScanButtons();
+      updateScanOverlayCursor();
+      return;
     }
 
-    scanDragStart=null;
-    scanDragCurrent=null;
-    scanManualBoxMode=false;
-    $('scanManualBoxBtn').classList.remove('active');
-    $('scanManualBoxBtn').textContent='＋ 手動新增框';
-    scanOverlay.style.cursor='default';
-    renderScanCandidateList();
-    renderScanPagesList();
-    drawScanOverlay();
-    updateScanButtons();
+    if(scanBoxEdit){
+      const page=scanCurrentPage();
+      const c=page?.candidates.find(x=>x.id===scanBoxEdit.candidateId);
+      if(c&&scanBoxEdit.moved){
+        markScanCandidateAdjusted(c);
+        renderScanCandidateList();
+        renderScanPagesList();
+        scanSetProgress(
+          `候選框 ${String((page.candidates.indexOf(c)+1)).padStart(2,'0')} 已手動調整。`
+        );
+      }
+
+      scanBoxEdit=null;
+      drawScanOverlay();
+      updateScanButtons();
+      updateScanOverlayCursor(ev);
+    }
+  });
+
+  scanOverlay.addEventListener('pointercancel',ev=>{
+    if(scanBoxEdit){
+      const page=scanCurrentPage();
+      const c=page?.candidates.find(x=>x.id===scanBoxEdit.candidateId);
+      if(c) c.rect=cloneScanRect(scanBoxEdit.originalRect);
+      scanBoxEdit=null;
+      drawScanOverlay();
+      updateScanOverlayCursor();
+    }
   });
 
   window.addEventListener('resize',()=>{

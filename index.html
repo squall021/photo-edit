@@ -4,8 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <meta name="referrer" content="no-referrer" />
-<title>會員照片標準化工作站 V14.2.6</title>
-<link rel="stylesheet" href="./style.css?v=14.2.6" />
+<title>會員照片標準化工作站 V14.3</title>
+<link rel="stylesheet" href="./style.css?v=14.3" />
 </head>
 <body>
 <div class="app desktop-app" id="app">
@@ -20,7 +20,7 @@
         <button id="scanModeBtn" type="button">掃描表拆圖</button>
       </div>
 
-      <a id="helpBtn" class="help-btn" href="./help.html?v=14.2.6" target="_blank" rel="noopener noreferrer">❓ 操作教學</a>
+      <a id="helpBtn" class="help-btn" href="./help.html?v=14.3" target="_blank" rel="noopener noreferrer">❓ 操作教學</a>
 
       <div id="faceModelStatus" class="model-status loading" title="MediaPipe Face Landmarker 狀態">
         <span class="model-dot"></span>
@@ -164,6 +164,7 @@
 
           <div class="scan-toolbar-actions">
             <button id="scanManualBoxBtn" type="button" disabled>＋ 手動新增框</button>
+            <button id="scanResetBoxBtn" type="button" disabled>↺ 重設選取框</button>
             <button id="scanDeleteBoxBtn" type="button" disabled>刪除選取框</button>
             <button id="scanSelectAllBtn" type="button" disabled>全選候選</button>
           </div>
@@ -198,7 +199,7 @@
         </div>
 
         <div class="scan-result-note">
-          系統以人臉為主，不依賴表格線或照片外框。空白格、紅筆記號與姓名文字通常不會被當成照片。
+          系統先自動建立候選框；選取後可拖曳四邊、四個角落或整個框做人工微調。
         </div>
 
         <div id="scanCandidatesList" class="scan-candidates-list"></div>
@@ -550,6 +551,6 @@
 
 
 
-<script type="module" src="./app.js?v=14.2.6"></script>
+<script type="module" src="./app.js?v=14.3"></script>
 </body>
 </html>

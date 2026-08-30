@@ -1203,3 +1203,20 @@ a.help-btn:hover{
   color:#64748b;
   font-size:11px;
 }
+
+
+/* ============================================================
+   V14.3 — 可調式候選框
+   ============================================================ */
+#scanOverlay{
+  touch-action:none;
+}
+
+.scan-candidate-item.manual-adjusted{
+  box-shadow:inset 3px 0 0 #8b5cf6;
+}
+
+.scan-candidate-badge.manual-adjusted{
+  background:#f5f3ff;
+  color:#6d28d9;
+}
