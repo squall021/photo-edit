@@ -1560,61 +1560,152 @@
     });
   }
 
+  function scanFaceBoxIoU(a,b){
+    const x1=Math.max(a.x,b.x), y1=Math.max(a.y,b.y);
+    const x2=Math.min(a.x+a.w,b.x+b.w), y2=Math.min(a.y+a.h,b.y+b.h);
+    const iw=Math.max(0,x2-x1), ih=Math.max(0,y2-y1);
+    const inter=iw*ih;
+    return inter ? inter/(a.w*a.h+b.w*b.h-inter) : 0;
+  }
+
+  function mergeScanFaceDetections(faceBoxes){
+    const sorted=[...faceBoxes].sort((a,b)=>(b.w*b.h)-(a.w*a.h));
+    const kept=[];
+    for(const box of sorted){
+      const dup=kept.some(k=>{
+        const iou=scanFaceBoxIoU(k,box);
+        const cx=box.x+box.w/2, cy=box.y+box.h/2;
+        const kcx=k.x+k.w/2, kcy=k.y+k.h/2;
+        const centerDist=Math.hypot(cx-kcx,cy-kcy);
+        const size=Math.max(18,Math.min(Math.max(box.w,box.h),Math.max(k.w,k.h)));
+        return iou>.28 || centerDist<size*.38;
+      });
+      if(!dup) kept.push(box);
+    }
+    return kept;
+  }
+
+  async function detectFacesInScanTile(img,tile){
+    const crop=document.createElement('canvas');
+    const targetLong=1050;
+    const tileLong=Math.max(tile.w,tile.h);
+    const scale=Math.max(1,Math.min(3.2,targetLong/tileLong));
+    crop.width=Math.max(1,Math.round(tile.w*scale));
+    crop.height=Math.max(1,Math.round(tile.h*scale));
+
+    const ctx=crop.getContext('2d',{willReadFrequently:true});
+    ctx.imageSmoothingEnabled=true;
+    ctx.imageSmoothingQuality='high';
+    ctx.drawImage(img,tile.x,tile.y,tile.w,tile.h,0,0,crop.width,crop.height);
+
+    const faces=await detectAllMediaPipeFaces(crop);
+    const mapped=[];
+    for(const face of faces){
+      const b=face.bbox;
+      const box={x:tile.x+b.x/scale,y:tile.y+b.y/scale,w:b.w/scale,h:b.h/scale};
+      if(box.w>=18 && box.h>=22) mapped.push(box);
+    }
+    crop.width=1; crop.height=1;
+    return mapped;
+  }
+
+  function buildScanDetectionTiles(imgW,imgH){
+    const tiles=[];
+    const portrait=imgH>=imgW;
+    const cols=portrait?3:4, rows=portrait?4:3, overlap=.18;
+    const baseW=imgW/cols, baseH=imgH/rows;
+
+    for(let row=0;row<rows;row++){
+      for(let col=0;col<cols;col++){
+        const cx=(col+.5)*baseW, cy=(row+.5)*baseH;
+        const w=Math.min(imgW,baseW*(1+overlap));
+        const h=Math.min(imgH,baseH*(1+overlap));
+        const x=Math.max(0,Math.min(imgW-w,cx-w/2));
+        const y=Math.max(0,Math.min(imgH-h,cy-h/2));
+        tiles.push({x,y,w,h});
+      }
+    }
+
+    const wideW=Math.min(imgW,baseW*1.75);
+    const wideH=Math.min(imgH,baseH*1.75);
+    for(let row=0;row<rows-1;row++){
+      for(let col=0;col<cols-1;col++){
+        const cx=(col+1)*baseW, cy=(row+1)*baseH;
+        const x=Math.max(0,Math.min(imgW-wideW,cx-wideW/2));
+        const y=Math.max(0,Math.min(imgH-wideH,cy-wideH/2));
+        tiles.push({x,y,w:wideW,h:wideH});
+      }
+    }
+    return tiles;
+  }
+
   async function detectFacesForScanPage(page){
     const img=await ensureScanPageImage(page);
+    const rawFaceBoxes=[];
 
-    const maxSide=1800;
-    const scale=Math.min(1,maxSide/Math.max(img.naturalWidth,img.naturalHeight));
-    const work=document.createElement('canvas');
-    work.width=Math.max(1,Math.round(img.naturalWidth*scale));
-    work.height=Math.max(1,Math.round(img.naturalHeight*scale));
-    const wctx=work.getContext('2d',{willReadFrequently:true});
-    wctx.drawImage(img,0,0,work.width,work.height);
+    // 第一層：整頁偵測
+    try{
+      const maxSide=1800;
+      const scale=Math.min(1,maxSide/Math.max(img.naturalWidth,img.naturalHeight));
+      const work=document.createElement('canvas');
+      work.width=Math.max(1,Math.round(img.naturalWidth*scale));
+      work.height=Math.max(1,Math.round(img.naturalHeight*scale));
+      const wctx=work.getContext('2d',{willReadFrequently:true});
+      wctx.imageSmoothingEnabled=true;
+      wctx.imageSmoothingQuality='high';
+      wctx.drawImage(img,0,0,work.width,work.height);
 
-    const faces=await detectAllMediaPipeFaces(work);
-    const inv=1/scale;
+      const faces=await detectAllMediaPipeFaces(work);
+      const inv=1/scale;
+      for(const face of faces){
+        const b=face.bbox;
+        rawFaceBoxes.push({x:b.x*inv,y:b.y*inv,w:b.w*inv,h:b.h*inv});
+      }
+      work.width=1; work.height=1;
+    }catch(err){
+      console.warn('整頁偵測失敗，改用分區偵測',err);
+    }
+
+    // 第二層：分區放大偵測
+    const tiles=buildScanDetectionTiles(img.naturalWidth,img.naturalHeight);
+    for(let i=0;i<tiles.length;i++){
+      scanSetProgress(`分區偵測 ${i+1} / ${tiles.length}｜目前找到 ${rawFaceBoxes.length} 個人臉候選…`);
+      try{
+        rawFaceBoxes.push(...await detectFacesInScanTile(img,tiles[i]));
+      }catch(err){
+        console.warn(`掃描區塊 ${i+1} 偵測失敗`,err);
+      }
+      if(i%2===1) await new Promise(r=>setTimeout(r,0));
+    }
+
+    const faceBoxes=mergeScanFaceDetections(rawFaceBoxes);
     const auto=[];
 
-    for(const face of faces){
-      const mapped={
-        bbox:{
-          x:face.bbox.x*inv,
-          y:face.bbox.y*inv,
-          w:face.bbox.w*inv,
-          h:face.bbox.h*inv
-        },
-        area:face.area*inv*inv
-      };
+    for(const box of faceBoxes){
+      const mapped={bbox:box,area:box.w*box.h};
+      if(box.w<18 || box.h<22) continue;
 
-      if(mapped.bbox.w<18 || mapped.bbox.h<22) continue;
-
-      const rect=scanCandidateRectFromFace(
-        mapped,
-        img.naturalWidth,
-        img.naturalHeight
-      );
-
-      if(auto.some(c=>scanRectIoU(c.rect,rect)>.58)) continue;
+      const rect=scanCandidateRectFromFace(mapped,img.naturalWidth,img.naturalHeight);
+      if(auto.some(c=>scanRectIoU(c.rect,rect)>.52)) continue;
 
       auto.push({
         id:scanCandidateSeq++,
         rect,
         enabled:true,
         source:'auto',
-        faceBox:mapped.bbox
+        faceBox:box
       });
     }
 
     sortScanCandidates(auto);
 
-    // 保留使用者手動新增的框；重新偵測時只更新自動框。
     const manual=(page.candidates||[]).filter(c=>c.source==='manual');
     page.candidates=[...auto,...manual];
     sortScanCandidates(page.candidates);
     page.detected=true;
     page.detectedAt=Date.now();
-
-    work.width=1;work.height=1;
+    page.rawFaceCount=rawFaceBoxes.length;
+    page.mergedFaceCount=faceBoxes.length;
     return auto.length;
   }
 
@@ -1861,12 +1952,16 @@
     const page=scanCurrentPage();
     if(!page) return;
 
-    scanSetProgress('MediaPipe 正在偵測目前掃描頁的所有人臉…');
+    scanSetProgress('MediaPipe 正在以「整頁＋分區放大」偵測掃描頁人臉…');
     $('scanDetectBtn').disabled=true;
     $('scanDetectAllBtn').disabled=true;
     try{
       const count=await detectFacesForScanPage(page);
-      scanSetProgress(`偵測完成：找到 ${count} 個自動候選框。若有漏掉，可使用「手動新增框」。`);
+      scanSetProgress(
+        count
+          ? `偵測完成：找到 ${count} 個候選照片。若有漏掉，可使用「手動新增框」。`
+          : '仍未偵測到人臉。可先用「手動新增框」拆圖。'
+      );
       scanSelectedCandidateId=null;
       await renderScanPage();
     }catch(err){
