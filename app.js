@@ -1896,6 +1896,179 @@
     }
   }
 
+
+  function getAssistRGBA(assist,x,y){
+    x=Math.max(0,Math.min(assist.width-1,Math.round(x)));
+    y=Math.max(0,Math.min(assist.height-1,Math.round(y)));
+    const i=(y*assist.width+x)*4;
+    const d=assist.data;
+    return [d[i],d[i+1],d[i+2],d[i+3]];
+  }
+
+  function isLikelyForegroundPixel(assist,x,y){
+    const [r,g,b,a]=getAssistRGBA(assist,x,y);
+    if(a<20) return false;
+    const mx=Math.max(r,g,b), mn=Math.min(r,g,b);
+    const sat=mx-mn;
+    const lum=r*.2126+g*.7152+b*.0722;
+    if(lum<230 && sat>10) return true;
+    if(lum<210) return true;
+    if(lum<240 && sat>22) return true;
+    return false;
+  }
+
+  function smoothNumericSeries(values,radius=2){
+    const out=[];
+    for(let i=0;i<values.length;i++){
+      let sum=0,count=0;
+      for(let j=Math.max(0,i-radius);j<=Math.min(values.length-1,i+radius);j++){
+        sum+=values[j]; count++;
+      }
+      out.push(count?sum/count:0);
+    }
+    return out;
+  }
+
+  function findContentSegmentAroundCenter(scores,targetIndex,strong=0.12,weak=0.065){
+    if(!scores.length) return null;
+    let center=-1;
+    let bestDist=Infinity;
+    for(let i=0;i<scores.length;i++){
+      if(scores[i] < strong) continue;
+      const dist=Math.abs(i-targetIndex);
+      if(dist<bestDist){ bestDist=dist; center=i; }
+    }
+    if(center<0) return null;
+
+    let left=center, right=center;
+    let gaps=0;
+    for(let i=center-1;i>=0;i--){
+      if(scores[i] >= weak){ left=i; gaps=0; }
+      else if(++gaps<=1){ left=i; }
+      else break;
+    }
+    gaps=0;
+    for(let i=center+1;i<scores.length;i++){
+      if(scores[i] >= weak){ right=i; gaps=0; }
+      else if(++gaps<=1){ right=i; }
+      else break;
+    }
+    return {left,right,center};
+  }
+
+  function estimateLowerContentBounds(faceBox,assist,pageW,pageH){
+    if(!assist) return {usable:false};
+    const s=assist.scale;
+    const cx=faceBox.x+faceBox.w/2;
+
+    const roi={
+      x1:Math.max(0,faceBox.x-faceBox.w*1.15),
+      x2:Math.min(pageW,faceBox.x+faceBox.w*2.15),
+      y1:Math.max(0,faceBox.y+faceBox.h*0.86),
+      y2:Math.min(pageH,faceBox.y+faceBox.h*2.12)
+    };
+    if(roi.x2-roi.x1<faceBox.w*0.9 || roi.y2-roi.y1<faceBox.h*0.5) return {usable:false};
+
+    const step=2;
+    const xVals=[];
+    const scores=[];
+    const yStart=Math.floor(roi.y1*s), yEnd=Math.ceil(roi.y2*s);
+    for(let xs=Math.floor(roi.x1*s); xs<=Math.ceil(roi.x2*s); xs+=step){
+      let hits=0, total=0, streak=0, bestStreak=0;
+      for(let y=yStart; y<=yEnd; y+=2){
+        const fg=isLikelyForegroundPixel(assist,xs,y);
+        if(fg){ hits++; streak++; bestStreak=Math.max(bestStreak,streak); }
+        else streak=0;
+        total++;
+      }
+      const ratio=total?hits/total:0;
+      const streakRatio=total?bestStreak/total:0;
+      xVals.push(xs/s);
+      scores.push(ratio*0.78+streakRatio*0.22);
+    }
+    const smooth=smoothNumericSeries(scores,2);
+    const targetIndex=Math.max(0,Math.min(smooth.length-1,Math.round(((cx-roi.x1)/(roi.x2-roi.x1))*(smooth.length-1))));
+    const seg=findContentSegmentAroundCenter(smooth,targetIndex,0.13,0.07);
+    if(!seg) return {usable:false};
+
+    const rawLeft=xVals[Math.max(0,seg.left)] ?? roi.x1;
+    const rawRight=xVals[Math.min(xVals.length-1,seg.right)] ?? roi.x2;
+    const contentWidth=Math.max(1,rawRight-rawLeft);
+    const avgScore=smooth.slice(seg.left,seg.right+1).reduce((a,b)=>a+b,0)/Math.max(1,seg.right-seg.left+1);
+    const usable=contentWidth>=faceBox.w*0.82 && avgScore>=0.09;
+    if(!usable) return {usable:false};
+
+    const sidePad=Math.max(faceBox.w*0.18, Math.min(faceBox.w*0.32, contentWidth*0.12));
+    let estLeft=Math.max(0, rawLeft-sidePad);
+    let estRight=Math.min(pageW, rawRight+sidePad);
+
+    // 底部利用衣服色塊結束位置推估，僅做收邊。
+    const x1=Math.floor(Math.max(0,estLeft+faceBox.w*0.08)*s);
+    const x2=Math.ceil(Math.min(pageW,estRight-faceBox.w*0.08)*s);
+    const rowScores=[];
+    const yVals=[];
+    for(let y=Math.floor(roi.y1*s); y<=Math.ceil(Math.min(pageH,faceBox.y+faceBox.h*2.45)*s); y+=2){
+      let hits=0,total=0;
+      for(let x=x1; x<=x2; x+=2){
+        if(isLikelyForegroundPixel(assist,x,y)) hits++;
+        total++;
+      }
+      rowScores.push(total?hits/total:0);
+      yVals.push(y/s);
+    }
+    const rowSmooth=smoothNumericSeries(rowScores,2);
+    let lastActive=-1;
+    for(let i=0;i<rowSmooth.length;i++) if(rowSmooth[i]>=0.07) lastActive=i;
+    let estBottom=null;
+    if(lastActive>=0){
+      estBottom=Math.min(pageH, yVals[lastActive]+faceBox.h*0.16);
+    }
+
+    return {
+      usable:true,
+      left:estLeft,
+      right:estRight,
+      bottom:estBottom,
+      confidence:Math.max(0,Math.min(1,avgScore*3.8)),
+      contentWidth,
+      avgScore
+    };
+  }
+
+  function applyLowerContentGuidance(rect,faceBox,assist,pageW,pageH){
+    const est=estimateLowerContentBounds(faceBox,assist,pageW,pageH);
+    if(!est.usable) return {rect,applied:false};
+
+    let left=rect.x, right=rect.x+rect.w, top=rect.y, bottom=rect.y+rect.h;
+    const safeLeft=faceBox.x-faceBox.w*.18;
+    const safeRight=faceBox.x+faceBox.w*1.18;
+    const safeBottom=faceBox.y+faceBox.h*1.56;
+
+    // 只做收邊，不做向外擴張；避免誤吃到鄰近照片。
+    if(est.left > left) left = est.left;
+    if(est.right < right) right = est.right;
+    if(est.bottom!=null && est.bottom < bottom) bottom = est.bottom;
+
+    // 最低安全素材
+    left=Math.min(left,safeLeft);
+    right=Math.max(right,safeRight);
+    bottom=Math.max(bottom,safeBottom);
+
+    // 置信度高時，再依內容寬度限制整體寬度上限
+    const contentMaxW=Math.max(faceBox.w*1.52, est.contentWidth + faceBox.w*0.42);
+    if(est.confidence>=0.35 && (right-left)>contentMaxW){
+      const center=faceBox.x+faceBox.w/2;
+      const half=contentMaxW/2;
+      left=Math.max(left, center-half);
+      right=Math.min(right, center+half);
+      left=Math.min(left,safeLeft);
+      right=Math.max(right,safeRight);
+    }
+
+    const out=scanClampRect({x:left,y:top,w:Math.max(1,right-left),h:Math.max(1,bottom-top)},pageW,pageH);
+    return {rect:out,applied:true,confidence:est.confidence};
+  }
+
   function findScanGridBoundary(assist,axis,target,minPos,maxPos){
     if(!assist) return null;
     const scores=axis==='x' ? assist.vertical : assist.horizontal;
@@ -2087,6 +2260,11 @@
     );
     rect=snapped.rect;
 
+    const lowerGuide=applyLowerContentGuidance(
+      rect,b,localEdgeAssist,pageW,pageH
+    );
+    rect=lowerGuide.rect;
+
     const trimmed=trimExcessWhitespace(
       rect,b,localEdgeAssist,pageW,pageH
     );
@@ -2107,6 +2285,8 @@
       extensionLimited:limited.limited,
       localEdgeSnapped:snapped.snapped,
       snapSides:snapped.snapSides,
+      lowerContentGuided:lowerGuide.applied,
+      lowerContentConfidence:lowerGuide.confidence||0,
       whitespaceTrimmed:trimmed.trimmed,
       trimSides:trimmed.trimSides,
       multiFaceRisk:otherCentersInside>0,
@@ -2274,6 +2454,8 @@
         extensionLimited:smart.extensionLimited,
         localEdgeSnapped:smart.localEdgeSnapped,
         snapSides:smart.snapSides,
+        lowerContentGuided:smart.lowerContentGuided,
+        lowerContentConfidence:smart.lowerContentConfidence,
         whitespaceTrimmed:smart.whitespaceTrimmed,
         trimSides:smart.trimSides,
         multiFaceRisk:smart.multiFaceRisk,
@@ -2347,6 +2529,7 @@
       const refined=
         c.extensionLimited||
         c.localEdgeSnapped||
+        c.lowerContentGuided||
         c.whitespaceTrimmed||
         c.sizeNormalized;
 
@@ -2378,6 +2561,7 @@
       if(c.gridAdjusted) extras.push('格線輔助');
       if(c.extensionLimited) extras.push('延伸限制');
       if(c.localEdgeSnapped) extras.push('照片邊緣');
+      if(c.lowerContentGuided) extras.push('衣服/肩膀');
       if(c.whitespaceTrimmed) extras.push('去白邊');
       if(c.sizeNormalized) extras.push('尺寸修正');
       if(c.multiFaceRisk) extras.push('多臉風險');
