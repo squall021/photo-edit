@@ -1063,3 +1063,22 @@ a.help-btn:hover{
 .quality-row[data-quality-key="headTop"]{
   border-color:#bfdbfe;
 }
+
+
+/* ============================================================
+   V14.2.1 — 智慧防重疊候選框
+   ============================================================ */
+.scan-candidate-badge.safe{
+  background:#ecfdf5;
+  color:#047857;
+}
+
+.scan-candidate-badge.review{
+  background:#fffbeb;
+  color:#b45309;
+}
+
+.scan-candidate-item.risk{
+  border-color:#fde68a;
+  background:#fffdf5;
+}

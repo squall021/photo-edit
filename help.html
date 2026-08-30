@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>會員照片標準化工作站 V14.2｜操作教學</title>
+<title>會員照片標準化工作站 V14.2.1｜操作教學</title>
 <style>
 :root{
   --bg:#f3f6fb;
@@ -256,7 +256,7 @@ th{background:#f8fafc}
 
 <header class="topbar">
   <div class="brand">
-    <strong>會員照片標準化工作站 V14.2</strong>
+    <strong>會員照片標準化工作站 V14.2.1</strong>
     <span>操作教學與批次處理說明</span>
   </div>
   <div class="top-actions">
@@ -358,8 +358,10 @@ th{background:#f8fafc}
       </div>
 
       <div class="callout green">
-        V14.1 採「整頁＋分區放大」雙層偵測。若整頁上的小人臉無法直接辨識，
-        系統會把掃描頁切成重疊區塊放大後逐區偵測，再把結果映射回原圖並自動去重。
+        V14.2.1 除了整頁＋分區放大偵測之外，候選框新增四層安全機制：
+        鄰近人臉中線限制、候選框不得包含另一張臉中心、明顯表格線輔助收邊，
+        以及拆分後再次執行人臉數量檢查。若拆出的照片仍有 0 臉或多臉，
+        會標記「需人工」，不直接進入自動標準化。
       </div>
     </section>
 

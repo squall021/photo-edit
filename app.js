@@ -1303,9 +1303,10 @@
       status.className='batch-status' + (cls ? ` ${cls}` : '');
       status.textContent=getBatchStatusText(item);
 
-      if(item.quality?.score!=null){
-        status.title=`品質分數 ${item.quality.score}`;
-      }
+      const tips=[];
+      if(item.quality?.score!=null) tips.push(`品質分數 ${item.quality.score}`);
+      if(item.scanValidation?.note) tips.push(item.scanValidation.note);
+      if(tips.length) status.title=tips.join('｜');
 
       main.append(name,status);
       row.append(img,main);
@@ -1592,18 +1593,257 @@
     return inter/(a.w*a.h+b.w*b.h-inter);
   }
 
-  function scanCandidateRectFromFace(face,pageW,pageH){
-    const b=face.bbox;
+  function buildScanGridAssist(img){
+    const maxSide=1400;
+    const scale=Math.min(1,maxSide/Math.max(img.naturalWidth,img.naturalHeight));
+    const c=document.createElement('canvas');
+    c.width=Math.max(1,Math.round(img.naturalWidth*scale));
+    c.height=Math.max(1,Math.round(img.naturalHeight*scale));
+    const ctx=c.getContext('2d',{willReadFrequently:true});
+    ctx.imageSmoothingEnabled=true;
+    ctx.imageSmoothingQuality='high';
+    ctx.drawImage(img,0,0,c.width,c.height);
+
+    const data=ctx.getImageData(0,0,c.width,c.height).data;
+    const vertical=new Float32Array(c.width);
+    const horizontal=new Float32Array(c.height);
+
+    // 全頁長直線／長橫線分數。
+    // 表格線通常貫穿很長距離；頭髮、五官只會占局部區域，
+    // 因此全頁分數可用來當「輔助邊界」，但不作為主要拆圖依據。
+    for(let x=1;x<c.width-1;x++){
+      let dark=0,edge=0,count=0;
+      for(let y=0;y<c.height;y+=2){
+        const i=(y*c.width+x)*4;
+        const il=(y*c.width+x-1)*4;
+        const ir=(y*c.width+x+1)*4;
+        const lum=data[i]*.2126+data[i+1]*.7152+data[i+2]*.0722;
+        const ll=data[il]*.2126+data[il+1]*.7152+data[il+2]*.0722;
+        const lr=data[ir]*.2126+data[ir+1]*.7152+data[ir+2]*.0722;
+        if(lum<205) dark++;
+        if(Math.abs(lr-ll)>28) edge++;
+        count++;
+      }
+      vertical[x]=count ? dark/count*.72 + edge/count*.28 : 0;
+    }
+
+    for(let y=1;y<c.height-1;y++){
+      let dark=0,edge=0,count=0;
+      for(let x=0;x<c.width;x+=2){
+        const i=(y*c.width+x)*4;
+        const it=((y-1)*c.width+x)*4;
+        const ib=((y+1)*c.width+x)*4;
+        const lum=data[i]*.2126+data[i+1]*.7152+data[i+2]*.0722;
+        const lt=data[it]*.2126+data[it+1]*.7152+data[it+2]*.0722;
+        const lb=data[ib]*.2126+data[ib+1]*.7152+data[ib+2]*.0722;
+        if(lum<205) dark++;
+        if(Math.abs(lb-lt)>28) edge++;
+        count++;
+      }
+      horizontal[y]=count ? dark/count*.72 + edge/count*.28 : 0;
+    }
+
+    c.width=1;c.height=1;
+    return {
+      scale,
+      vertical,
+      horizontal,
+      width:Math.round(img.naturalWidth*scale),
+      height:Math.round(img.naturalHeight*scale)
+    };
+  }
+
+  function findScanGridBoundary(assist,axis,target,minPos,maxPos){
+    if(!assist) return null;
+    const scores=axis==='x' ? assist.vertical : assist.horizontal;
+    const scale=assist.scale;
+    let a=Math.max(1,Math.floor(Math.min(minPos,maxPos)*scale));
+    let b=Math.min(scores.length-2,Math.ceil(Math.max(minPos,maxPos)*scale));
+    if(b<=a) return null;
+
+    const targetScaled=target*scale;
+    let bestIndex=-1,bestScore=0,bestDistance=Infinity;
+
+    for(let i=a;i<=b;i++){
+      const s=scores[i];
+      if(s<.115) continue;
+      const d=Math.abs(i-targetScaled);
+      // 分數相近時優先選離理想邊界較近的格線。
+      if(s>bestScore+.015 || (Math.abs(s-bestScore)<=.015 && d<bestDistance)){
+        bestScore=s;
+        bestDistance=d;
+        bestIndex=i;
+      }
+    }
+
+    return bestIndex>=0 ? bestIndex/scale : null;
+  }
+
+  function scanRectContainsPoint(rect,x,y){
+    return x>rect.x && x<rect.x+rect.w && y>rect.y && y<rect.y+rect.h;
+  }
+
+  function scanCandidateRectFromFaceSmart(faceBox,allFaceBoxes,pageW,pageH,gridAssist=null){
+    const b=faceBox;
     const cx=b.x+b.w/2;
+    const cy=b.y+b.h/2;
 
-    // 先抓出「人臉周圍足夠大的局部照片」，不必精準沿紙本照片外框。
-    // 後續會員照標準化會再依頭頂／下顎做精確裁切。
-    const w=b.w*2.55;
-    const h=b.h*3.05;
-    const x=cx-w/2;
-    const y=b.y-b.h*.62;
+    // 維持足夠的頭髮、肩膀素材，但不像舊版固定 2.55x3.05 後完全不看鄰居。
+    let left=cx-b.w*1.275;
+    let right=cx+b.w*1.275;
+    let top=b.y-b.h*.62;
+    let bottom=b.y+b.h*2.43;
 
-    return scanClampRect({x,y,w,h},pageW,pageH);
+    let constrained=false;
+    let gridAdjusted=false;
+
+    // ── 1. 鄰近人臉中線限制 ─────────────────────────────
+    for(const o of allFaceBoxes){
+      if(o===b) continue;
+      const ocx=o.x+o.w/2;
+      const ocy=o.y+o.h/2;
+
+      const sameRow=Math.abs(ocy-cy) < Math.max(b.h,o.h)*1.10;
+      const sameCol=Math.abs(ocx-cx) < Math.max(b.w,o.w)*1.35;
+
+      if(sameRow){
+        const mid=(cx+ocx)/2;
+        if(ocx>cx && mid<right){
+          right=mid;
+          constrained=true;
+        }else if(ocx<cx && mid>left){
+          left=mid;
+          constrained=true;
+        }
+      }
+
+      if(sameCol){
+        const mid=(cy+ocy)/2;
+        if(ocy>cy && mid<bottom){
+          bottom=mid;
+          constrained=true;
+        }else if(ocy<cy && mid>top){
+          top=mid;
+          constrained=true;
+        }
+      }
+    }
+
+    // ── 2. 明顯表格線輔助收邊 ───────────────────────────
+    // 只在格線位於「臉之外」且靠近理想邊界時採用。
+    const lLine=findScanGridBoundary(
+      gridAssist,'x',left,
+      Math.max(0,left-b.w*.45),
+      Math.min(b.x-b.w*.12,left+b.w*.65)
+    );
+    if(lLine!=null && lLine<b.x-b.w*.10){
+      left=Math.max(left,lLine);
+      gridAdjusted=true;
+    }
+
+    const rLine=findScanGridBoundary(
+      gridAssist,'x',right,
+      Math.max(b.x+b.w*1.10,right-b.w*.65),
+      Math.min(pageW,right+b.w*.45)
+    );
+    if(rLine!=null && rLine>b.x+b.w*1.10){
+      right=Math.min(right,rLine);
+      gridAdjusted=true;
+    }
+
+    const tLine=findScanGridBoundary(
+      gridAssist,'y',top,
+      Math.max(0,top-b.h*.40),
+      Math.min(b.y-b.h*.18,top+b.h*.60)
+    );
+    if(tLine!=null && tLine<b.y-b.h*.12){
+      top=Math.max(top,tLine);
+      gridAdjusted=true;
+    }
+
+    const bLine=findScanGridBoundary(
+      gridAssist,'y',bottom,
+      Math.max(b.y+b.h*1.18,bottom-b.h*.65),
+      Math.min(pageH,bottom+b.h*.42)
+    );
+    if(bLine!=null && bLine>b.y+b.h*1.12){
+      bottom=Math.min(bottom,bLine);
+      gridAdjusted=true;
+    }
+
+    // ── 3. 保證目標人臉周邊的最低安全素材 ───────────────
+    const safeLeft=b.x-b.w*.20;
+    const safeRight=b.x+b.w*1.20;
+    const safeTop=b.y-b.h*.34;
+    const safeBottom=b.y+b.h*1.62;
+
+    left=Math.min(left,safeLeft);
+    right=Math.max(right,safeRight);
+    top=Math.min(top,safeTop);
+    bottom=Math.max(bottom,safeBottom);
+
+    left=Math.max(0,left);
+    top=Math.max(0,top);
+    right=Math.min(pageW,right);
+    bottom=Math.min(pageH,bottom);
+
+    // ── 4. 候選框不得包含另一張臉的中心 ─────────────────
+    // 如果仍包含，就沿兩張臉的中線再縮一次。
+    for(const o of allFaceBoxes){
+      if(o===b) continue;
+      const ocx=o.x+o.w/2;
+      const ocy=o.y+o.h/2;
+      let rect={x:left,y:top,w:right-left,h:bottom-top};
+      if(!scanRectContainsPoint(rect,ocx,ocy)) continue;
+
+      const dx=ocx-cx;
+      const dy=ocy-cy;
+
+      if(Math.abs(dx/b.w) >= Math.abs(dy/b.h)){
+        const mid=(cx+ocx)/2;
+        if(dx>0) right=Math.min(right,mid);
+        else left=Math.max(left,mid);
+      }else{
+        const mid=(cy+ocy)/2;
+        if(dy>0) bottom=Math.min(bottom,mid);
+        else top=Math.max(top,mid);
+      }
+      constrained=true;
+    }
+
+    // 再次確保目標臉本身不會被切掉。
+    left=Math.min(left,safeLeft);
+    right=Math.max(right,safeRight);
+    top=Math.min(top,safeTop);
+    bottom=Math.max(bottom,safeBottom);
+
+    left=Math.max(0,left);
+    top=Math.max(0,top);
+    right=Math.min(pageW,right);
+    bottom=Math.min(pageH,bottom);
+
+    const rect=scanClampRect({
+      x:left,
+      y:top,
+      w:Math.max(1,right-left),
+      h:Math.max(1,bottom-top)
+    },pageW,pageH);
+
+    // 最終風險檢查：框內是否仍包含其他人臉中心。
+    const otherCentersInside=allFaceBoxes.filter(o=>{
+      if(o===b) return false;
+      const ocx=o.x+o.w/2;
+      const ocy=o.y+o.h/2;
+      return scanRectContainsPoint(rect,ocx,ocy);
+    }).length;
+
+    return {
+      rect,
+      constrained,
+      gridAdjusted,
+      multiFaceRisk:otherCentersInside>0,
+      otherCentersInside
+    };
   }
 
   function sortScanCandidates(candidates){
@@ -1736,20 +1976,33 @@
 
     const faceBoxes=mergeScanFaceDetections(rawFaceBoxes);
     const auto=[];
+    const gridAssist=buildScanGridAssist(img);
 
     for(const box of faceBoxes){
-      const mapped={bbox:box,area:box.w*box.h};
       if(box.w<18 || box.h<22) continue;
 
-      const rect=scanCandidateRectFromFace(mapped,img.naturalWidth,img.naturalHeight);
-      if(auto.some(c=>scanRectIoU(c.rect,rect)>.52)) continue;
+      const smart=scanCandidateRectFromFaceSmart(
+        box,
+        faceBoxes,
+        img.naturalWidth,
+        img.naturalHeight,
+        gridAssist
+      );
+
+      // 這裡只去除真正近乎重複的同一人框；
+      // 鄰近不同照片現在由中線限制處理，不再因框很大而互相吞掉。
+      if(auto.some(c=>scanRectIoU(c.rect,smart.rect)>.72)) continue;
 
       auto.push({
         id:scanCandidateSeq++,
-        rect,
+        rect:smart.rect,
         enabled:true,
         source:'auto',
-        faceBox:box
+        faceBox:box,
+        constrained:smart.constrained,
+        gridAdjusted:smart.gridAdjusted,
+        multiFaceRisk:smart.multiFaceRisk,
+        otherCentersInside:smart.otherCentersInside
       });
     }
 
@@ -1810,7 +2063,9 @@
 
     candidates.forEach((c,index)=>{
       const row=document.createElement('div');
-      row.className='scan-candidate-item'+(c.id===scanSelectedCandidateId?' active':'');
+      row.className='scan-candidate-item'
+        +(c.id===scanSelectedCandidateId?' active':'')
+        +(c.multiFaceRisk?' risk':'');
       row.dataset.id=c.id;
 
       const check=document.createElement('input');
@@ -1830,12 +2085,23 @@
       name.textContent=`${String(index+1).padStart(2,'0')} 候選照片`;
       const meta=document.createElement('div');
       meta.className='scan-candidate-meta';
-      meta.textContent=`${Math.round(c.rect.w)} × ${Math.round(c.rect.h)} px`;
+      const extras=[];
+      if(c.constrained) extras.push('鄰臉限制');
+      if(c.gridAdjusted) extras.push('格線輔助');
+      if(c.multiFaceRisk) extras.push('多臉風險');
+      meta.textContent=
+        `${Math.round(c.rect.w)} × ${Math.round(c.rect.h)} px`
+        +(extras.length ? `｜${extras.join('・')}` : '');
       info.append(name,meta);
 
       const badge=document.createElement('span');
-      badge.className='scan-candidate-badge';
-      badge.textContent=c.source==='manual'?'手動':'人臉';
+      badge.className='scan-candidate-badge'
+        +(c.multiFaceRisk?' review':c.source==='manual'?'':' safe');
+      badge.textContent=c.source==='manual'
+        ? '手動'
+        : c.multiFaceRisk
+          ? '需檢查'
+          : '安全框';
 
       row.append(check,info,badge);
       row.addEventListener('click',()=>{
@@ -2051,9 +2317,122 @@
     }
   }
 
-  async function cropScanCandidateToFile(page,candidate,pageIndex,itemIndex){
+  function cropCanvasRectV1421(input,rect){
+    const r=scanClampRect(rect,input.width,input.height);
+    const out=document.createElement('canvas');
+    out.width=Math.max(1,Math.round(r.w));
+    out.height=Math.max(1,Math.round(r.h));
+    const ctx=out.getContext('2d',{willReadFrequently:true});
+    ctx.fillStyle='#fff';
+    ctx.fillRect(0,0,out.width,out.height);
+    ctx.drawImage(
+      input,
+      r.x,r.y,r.w,r.h,
+      0,0,out.width,out.height
+    );
+    return out;
+  }
+
+  function scanFaceCenterFromDetected(face){
+    return {
+      x:face.bbox.x+face.bbox.w/2,
+      y:face.bbox.y+face.bbox.h/2
+    };
+  }
+
+  function chooseExpectedScanFace(faces,candidate,cropRect){
+    if(!faces.length) return null;
+
+    // 自動候選框知道原掃描頁上的目標臉位置，
+    // 可將目標中心轉換到拆出來的小圖座標，選最近的一張臉。
+    if(candidate.faceBox){
+      const expected={
+        x:candidate.faceBox.x+candidate.faceBox.w/2-cropRect.x,
+        y:candidate.faceBox.y+candidate.faceBox.h/2-cropRect.y
+      };
+
+      return [...faces].sort((a,b)=>{
+        const ac=scanFaceCenterFromDetected(a);
+        const bc=scanFaceCenterFromDetected(b);
+        return Math.hypot(ac.x-expected.x,ac.y-expected.y)
+             - Math.hypot(bc.x-expected.x,bc.y-expected.y);
+      })[0];
+    }
+
+    // 手動框沒有原始臉資訊時，選最大臉。
+    return [...faces].sort((a,b)=>b.area-a.area)[0];
+  }
+
+  async function validateAndFixScanCrop(canvas,candidate,cropRect){
+    let faces=await detectAllMediaPipeFaces(canvas);
+
+    if(faces.length===1){
+      return {
+        canvas,
+        status:'ok',
+        faceCount:1,
+        note:'拆分後單一人臉'
+      };
+    }
+
+    if(faces.length===0){
+      return {
+        canvas,
+        status:'manual',
+        faceCount:0,
+        note:'拆分後未偵測到人臉，請人工確認'
+      };
+    }
+
+    const target=chooseExpectedScanFace(faces,candidate,cropRect);
+    if(!target){
+      return {
+        canvas,
+        status:'manual',
+        faceCount:faces.length,
+        note:`拆分後偵測到 ${faces.length} 張臉`
+      };
+    }
+
+    const faceBoxes=faces.map(f=>f.bbox);
+    const targetIndex=faces.indexOf(target);
+    const targetBox=faceBoxes[targetIndex];
+
+    // 多臉時再用「鄰近人臉中線」建立更緊的安全框。
+    const smart=scanCandidateRectFromFaceSmart(
+      targetBox,
+      faceBoxes,
+      canvas.width,
+      canvas.height,
+      null
+    );
+
+    const fixed=cropCanvasRectV1421(canvas,smart.rect);
+    const facesAfter=await detectAllMediaPipeFaces(fixed);
+
+    if(facesAfter.length===1){
+      return {
+        canvas:fixed,
+        status:'auto-fixed',
+        faceCount:1,
+        originalFaceCount:faces.length,
+        note:`原候選含 ${faces.length} 張臉，已自動縮框保留目標人臉`
+      };
+    }
+
+    return {
+      canvas:fixed,
+      status:'manual',
+      faceCount:facesAfter.length,
+      originalFaceCount:faces.length,
+      note:`多臉自動縮框後仍偵測到 ${facesAfter.length} 張臉，請人工確認`
+    };
+  }
+
+  async function cropScanCandidateToResult(page,candidate,pageIndex,itemIndex){
     const img=await ensureScanPageImage(page);
     const r=scanClampRect(candidate.rect,img.naturalWidth,img.naturalHeight);
+
     const c=document.createElement('canvas');
     c.width=Math.max(1,Math.round(r.w));
     c.height=Math.max(1,Math.round(r.h));
@@ -2065,13 +2444,32 @@
       r.x,r.y,r.w,r.h,
       0,0,c.width,c.height
     );
-    const blob=await canvasToBlob(c,'image/jpeg',.98);
-    c.width=1;c.height=1;
-    return new File(
+
+    const validation=await validateAndFixScanCrop(c,candidate,r);
+    const finalCanvas=validation.canvas;
+
+    const blob=await canvasToBlob(finalCanvas,'image/jpeg',.98);
+    const file=new File(
       [blob],
       `scan_p${String(pageIndex+1).padStart(2,'0')}_${String(itemIndex+1).padStart(2,'0')}.jpg`,
       {type:'image/jpeg'}
     );
+
+    if(finalCanvas!==c){
+      finalCanvas.width=1;
+      finalCanvas.height=1;
+    }
+    c.width=1;c.height=1;
+
+    return {
+      file,
+      validation:{
+        status:validation.status,
+        faceCount:validation.faceCount,
+        originalFaceCount:validation.originalFaceCount,
+        note:validation.note
+      }
+    };
   }
 
   async function standardizeBatchRangeV14(startIndex,endIndex){
@@ -2085,6 +2483,16 @@
     try{
       for(let i=startIndex;i<endIndex;i++){
         const item=batchItems[i];
+
+        // V14.2.1：拆分後 0 臉或多臉仍無法排除時，不進自動標準化。
+        if(item.scanValidation?.status==='manual'){
+          item.workflowState='manual';
+          item.workflowNote='掃描表拆圖｜'+item.scanValidation.note;
+          manual++;
+          renderBatchList();
+          continue;
+        }
+
         item.workflowState='processing';
         renderBatchList();
         showBatchProgress(`掃描拆圖標準化：${i-startIndex+1} / ${endIndex-startIndex}　${item.file.name}`);
@@ -2109,7 +2517,11 @@
             item.quality=result.quality;
             item.workflowState=workflowStateFromQuality(result.quality);
             item.workflowPreset=presetKey;
-            item.workflowNote='掃描表拆圖｜'+result.notes.join('、');
+            item.workflowNote='掃描表拆圖｜'
+              +(item.scanValidation?.status==='auto-fixed'
+                ? item.scanValidation.note+'｜'
+                : '')
+              +result.notes.join('、');
 
             if(item.workflowState==='pass') pass++;
             else if(item.workflowState==='review') review++;
@@ -2155,22 +2567,50 @@
     $('scanSplitStandardizeBtn').disabled=true;
 
     try{
-      const files=[];
+      const splitResults=[];
+      let autoFixed=0,manualCheck=0;
+
       for(let i=0;i<selected.length;i++){
         const item=selected[i];
-        scanSetProgress(`正在拆分 ${i+1} / ${selected.length}…`);
-        files.push(await cropScanCandidateToFile(
+        scanSetProgress(
+          `正在拆分並檢查人臉 ${i+1} / ${selected.length}…`
+        );
+
+        const result=await cropScanCandidateToResult(
           item.page,
           item.candidate,
           item.pageIndex,
           item.index
-        ));
+        );
+
+        splitResults.push(result);
+        if(result.validation.status==='auto-fixed') autoFixed++;
+        if(result.validation.status==='manual') manualCheck++;
+
         await new Promise(r=>setTimeout(r,0));
       }
 
+      const files=splitResults.map(r=>r.file);
       const start=batchItems.length;
       await addBatchFiles(files);
       const end=batchItems.length;
+
+      splitResults.forEach((result,i)=>{
+        const batchItem=batchItems[start+i];
+        if(!batchItem) return;
+
+        batchItem.scanValidation=result.validation;
+
+        if(result.validation.status==='manual'){
+          batchItem.workflowState='manual';
+          batchItem.workflowNote='掃描表拆圖｜'+result.validation.note;
+        }else if(result.validation.status==='auto-fixed'){
+          batchItem.workflowState='review';
+          batchItem.workflowNote='掃描表拆圖｜'+result.validation.note;
+        }
+      });
+
+      renderBatchList();
 
       if(standardize){
         await standardizeBatchRangeV14(start,end);
@@ -2182,8 +2622,8 @@
 
       scanSetProgress(
         standardize
-          ? `已拆分 ${files.length} 張並完成會員照標準化，已送入批次清單。`
-          : `已拆分 ${files.length} 張，已送入批次清單。`
+          ? `已拆分 ${files.length} 張並執行會員照流程；自動縮框 ${autoFixed} 張、需人工確認 ${manualCheck} 張。`
+          : `已拆分 ${files.length} 張；自動縮框 ${autoFixed} 張、需人工確認 ${manualCheck} 張。`
       );
     }catch(err){
       scanSetProgress('拆分照片失敗：'+(err?.message||'未知錯誤'));
