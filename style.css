@@ -1126,8 +1126,8 @@ a.help-btn:hover{
 
 .scan-page-remove{
   position:absolute;
-  right:-3px;
-  bottom:-3px;
+  right:5px;
+  bottom:5px;
   z-index:3;
   width:24px;
   height:24px;

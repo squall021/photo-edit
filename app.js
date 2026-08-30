@@ -1930,6 +1930,225 @@
     return out;
   }
 
+  function localGrayStats(assist,x1,y1,x2,y2){
+    if(!assist) return {mean:255,std:0,count:0};
+    const s=assist.scale;
+    const ax=Math.max(0,Math.floor(x1*s));
+    const ay=Math.max(0,Math.floor(y1*s));
+    const bx=Math.min(assist.width,Math.ceil(x2*s));
+    const by=Math.min(assist.height,Math.ceil(y2*s));
+    let sum=0,sum2=0,count=0;
+    for(let y=ay;y<by;y+=2){
+      for(let x=ax;x<bx;x+=2){
+        const i=(y*assist.width+x)*4,d=assist.data;
+        if(d[i+3]<20) continue;
+        const lum=d[i]*.2126+d[i+1]*.7152+d[i+2]*.0722;
+        sum+=lum;
+        sum2+=lum*lum;
+        count++;
+      }
+    }
+    if(!count) return {mean:255,std:0,count:0};
+    const mean=sum/count;
+    return {mean,std:Math.sqrt(Math.max(0,sum2/count-mean*mean)),count};
+  }
+
+  function detectLightClothing(faceBox,assist,pageW,pageH){
+    if(!assist) return {likely:false,confidence:0};
+
+    const cx=faceBox.x+faceBox.w/2;
+    const y1=faceBox.y+faceBox.h*1.00;
+    const y2=Math.min(pageH,faceBox.y+faceBox.h*1.78);
+
+    const center=localGrayStats(
+      assist,
+      Math.max(0,cx-faceBox.w*.62),
+      y1,
+      Math.min(pageW,cx+faceBox.w*.62),
+      y2
+    );
+
+    const leftBg=localGrayStats(
+      assist,
+      Math.max(0,faceBox.x-faceBox.w*.95),
+      y1,
+      Math.max(0,faceBox.x-faceBox.w*.20),
+      y2
+    );
+
+    const rightBg=localGrayStats(
+      assist,
+      Math.min(pageW,faceBox.x+faceBox.w*1.20),
+      y1,
+      Math.min(pageW,faceBox.x+faceBox.w*1.95),
+      y2
+    );
+
+    const bgMean=(leftBg.mean+rightBg.mean)/2;
+    const bgStd=(leftBg.std+rightBg.std)/2;
+
+    // 白衣 / 淺灰衣常與白底平均亮度接近，但通常仍有陰影與紋理。
+    const nearWhite=center.mean>205;
+    const closeToBg=Math.abs(center.mean-bgMean)<24;
+    const hasTexture=center.std>8.5;
+    const bgFlatter=bgStd<center.std*1.15;
+
+    const confidence=
+      (nearWhite?0.30:0) +
+      (closeToBg?0.25:0) +
+      (hasTexture?0.30:0) +
+      (bgFlatter?0.15:0);
+
+    return {
+      likely:confidence>=0.62,
+      confidence,
+      centerMean:center.mean,
+      centerStd:center.std,
+      bgMean,
+      bgStd
+    };
+  }
+
+  function minimumShoulderBounds(faceBox,pageW,mode='normal'){
+    const cx=faceBox.x+faceBox.w/2;
+    const mult=mode==='light' ? 1.62 : 1.48;
+    const half=faceBox.w*mult/2;
+    return {
+      left:Math.max(0,cx-half),
+      right:Math.min(pageW,cx+half)
+    };
+  }
+
+  function applyLightClothingShoulderProtection(rect,faceBox,assist,pageW,pageH){
+    const light=detectLightClothing(faceBox,assist,pageW,pageH);
+    if(!light.likely){
+      return {rect,applied:false,light};
+    }
+
+    let left=rect.x;
+    let right=rect.x+rect.w;
+    const top=rect.y;
+    const bottom=rect.y+rect.h;
+
+    const shoulder=minimumShoulderBounds(faceBox,pageW,'light');
+
+    // 白衣模式只允許「放寬」，不縮窄。
+    // 避免衣服被誤認成背景後把候選框壓到只剩臉寬。
+    left=Math.min(left,shoulder.left);
+    right=Math.max(right,shoulder.right);
+
+    return {
+      rect:scanClampRect(
+        {x:left,y:top,w:right-left,h:bottom-top},
+        pageW,pageH
+      ),
+      applied:true,
+      light
+    };
+  }
+
+  function rowTextLikeScore(assist,x1,x2,y,bandH){
+    if(!assist) return 0;
+    const s=assist.scale;
+    const ax=Math.max(0,Math.floor(x1*s));
+    const bx=Math.min(assist.width-1,Math.ceil(x2*s));
+    const ay=Math.max(1,Math.floor((y-bandH/2)*s));
+    const by=Math.min(assist.height-2,Math.ceil((y+bandH/2)*s));
+
+    let edgeHits=0,darkHits=0,total=0,segments=0,inDark=false
+;
+    for(let x=ax;x<=bx;x+=2){
+      let colDark=false;
+      for(let yy=ay;yy<=by;yy+=2){
+        const i=(yy*assist.width+x)*4,d=assist.data;
+        const lum=d[i]*.2126+d[i+1]*.7152+d[i+2]*.0722;
+        const l=localEdgeLuma(assist,x-1,yy);
+        const r=localEdgeLuma(assist,x+1,yy);
+        if(lum<185){darkHits++;colDark=true;}
+        if(Math.abs(r-l)>30) edgeHits++;
+        total++;
+      }
+      if(colDark && !inDark){segments++;inDark=true;}
+      if(!colDark) inDark=false;
+    }
+
+    if(!total) return 0;
+    const edgeRatio=edgeHits/total;
+    const darkRatio=darkHits/total;
+
+    // 文字列通常：暗像素不多，但邊緣很多且分散成多個小段。
+    return edgeRatio*.55 + Math.min(.25,darkRatio)*.55 + Math.min(1,segments/12)*.35;
+  }
+
+  function findTextRowBoundary(assist,faceBox,left,right,startY,endY){
+    if(!assist) return null;
+    const bandH=Math.max(4,faceBox.h*.10);
+    let best=null;
+
+    for(let y=startY;y<=endY;y+=Math.max(2,faceBox.h*.045)){
+      const score=rowTextLikeScore(assist,left,right,y,bandH);
+      if(score<.29) continue;
+
+      // 文字列前通常會先有一小段空白；確認上方不是衣服連續內容。
+      const upperWhite=scanRegionWhitespaceRatio(assist,{
+        x:left,
+        y:Math.max(0,y-faceBox.h*.18),
+        w:right-left,
+        h:faceBox.h*.12
+      });
+
+      if(upperWhite<.70) continue;
+
+      best={y,score};
+      break;
+    }
+    return best;
+  }
+
+  function applyTextRowIsolation(rect,faceBox,assist,pageW,pageH){
+    if(!assist) return {rect,applied:false};
+
+    let left=rect.x,right=rect.x+rect.w,top=rect.y,bottom=rect.y+rect.h;
+    const searchStart=Math.max(
+      faceBox.y+faceBox.h*1.45,
+      top+(bottom-top)*.52
+    );
+    const searchEnd=Math.min(
+      pageH,
+      faceBox.y+faceBox.h*2.45,
+      bottom
+    );
+
+    if(searchEnd<=searchStart) return {rect,applied:false};
+
+    const text=findTextRowBoundary(
+      assist,faceBox,left,right,searchStart,searchEnd
+    );
+
+    if(!text) return {rect,applied:false};
+
+    const safeBottom=faceBox.y+faceBox.h*1.55;
+    const targetBottom=Math.max(
+      safeBottom,
+      text.y-faceBox.h*.08
+    );
+
+    if(targetBottom>=bottom-faceBox.h*.04){
+      return {rect,applied:false};
+    }
+
+    bottom=targetBottom;
+
+    return {
+      rect:scanClampRect(
+        {x:left,y:top,w:right-left,h:bottom-top},
+        pageW,pageH
+      ),
+      applied:true,
+      score:text.score
+    };
+  }
+
   function findContentSegmentAroundCenter(scores,targetIndex,strong=0.12,weak=0.065){
     if(!scores.length) return null;
     let center=-1;
@@ -2317,6 +2536,16 @@
     );
     rect=lowerGuide.rect;
 
+    const lightClothing=applyLightClothingShoulderProtection(
+      rect,b,localEdgeAssist,pageW,pageH
+    );
+    rect=lightClothing.rect;
+
+    const textIsolation=applyTextRowIsolation(
+      rect,b,localEdgeAssist,pageW,pageH
+    );
+    rect=textIsolation.rect;
+
     const trimmed=trimExcessWhitespace(
       rect,b,localEdgeAssist,pageW,pageH
     );
@@ -2339,6 +2568,10 @@
       snapSides:snapped.snapSides,
       lowerContentGuided:lowerGuide.applied,
       lowerContentConfidence:lowerGuide.confidence||0,
+      lightClothingProtected:lightClothing.applied,
+      lightClothingConfidence:lightClothing.light?.confidence||0,
+      textRowIsolated:textIsolation.applied,
+      textRowScore:textIsolation.score||0,
       whitespaceTrimmed:trimmed.trimmed,
       trimSides:trimmed.trimSides,
       multiFaceRisk:otherCentersInside>0,
@@ -2508,6 +2741,10 @@
         snapSides:smart.snapSides,
         lowerContentGuided:smart.lowerContentGuided,
         lowerContentConfidence:smart.lowerContentConfidence,
+        lightClothingProtected:smart.lightClothingProtected,
+        lightClothingConfidence:smart.lightClothingConfidence,
+        textRowIsolated:smart.textRowIsolated,
+        textRowScore:smart.textRowScore,
         whitespaceTrimmed:smart.whitespaceTrimmed,
         trimSides:smart.trimSides,
         multiFaceRisk:smart.multiFaceRisk,
@@ -2562,7 +2799,7 @@
         await removeScanPage(index);
       });
 
-      thumbWrap.append(img,removeBtn);
+      thumbWrap.append(img);
 
       const info=document.createElement('div');
       const name=document.createElement('div');
@@ -2577,7 +2814,7 @@
         : '尚未偵測';
 
       info.append(name,state);
-      row.append(thumbWrap,info);
+      row.append(thumbWrap,info,removeBtn);
       row.addEventListener('click',()=>loadScanPage(index));
       scanPagesList.appendChild(row);
     });
@@ -2599,6 +2836,8 @@
         c.extensionLimited||
         c.localEdgeSnapped||
         c.lowerContentGuided||
+        c.lightClothingProtected||
+        c.textRowIsolated||
         c.whitespaceTrimmed||
         c.sizeNormalized;
 
@@ -2631,6 +2870,8 @@
       if(c.extensionLimited) extras.push('延伸限制');
       if(c.localEdgeSnapped) extras.push('照片邊緣');
       if(c.lowerContentGuided) extras.push('衣服/肩膀');
+      if(c.lightClothingProtected) extras.push('白衣保護');
+      if(c.textRowIsolated) extras.push('文字隔離');
       if(c.whitespaceTrimmed) extras.push('去白邊');
       if(c.sizeNormalized) extras.push('尺寸修正');
       if(c.multiFaceRisk) extras.push('多臉風險');
