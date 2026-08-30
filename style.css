@@ -1238,3 +1238,75 @@ a.help-btn:hover{
 .desktop-app.batch-active #singleInfoPanel{
   display:none !important;
 }
+
+
+/* ============================================================
+   V14.5 — 掃描表拆圖縮放控制
+   ============================================================ */
+.scan-toolbar-title{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+
+.scan-zoom-controls{
+  margin-left:auto;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex:0 0 auto;
+}
+
+.scan-zoom-controls button{
+  width:auto;
+  min-width:34px;
+  min-height:34px;
+  padding:4px 8px;
+  white-space:nowrap;
+}
+
+.scan-zoom-controls input[type="range"]{
+  width:140px;
+  min-width:90px;
+}
+
+#scanZoomVal{
+  min-width:45px;
+  text-align:center;
+  color:#334155;
+  font-size:12px;
+  font-variant-numeric:tabular-nums;
+}
+
+.scan-toolbar-actions{
+  margin-left:0;
+}
+
+@media (max-width:1450px){
+  .scan-toolbar{
+    flex-wrap:wrap;
+  }
+
+  .scan-zoom-controls{
+    margin-left:auto;
+  }
+
+  .scan-toolbar-actions{
+    width:100%;
+    margin-left:0;
+    justify-content:flex-end;
+  }
+}
+
+@media (max-width:1000px){
+  .scan-zoom-controls{
+    width:100%;
+    margin-left:0;
+  }
+
+  .scan-zoom-controls input[type="range"]{
+    flex:1 1 auto;
+    width:auto;
+  }
+}

@@ -4,8 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <meta name="referrer" content="no-referrer" />
-<title>會員照片標準化工作站 V14.4</title>
-<link rel="stylesheet" href="./style.css?v=14.4" />
+<title>會員照片標準化工作站 V14.5</title>
+<link rel="stylesheet" href="./style.css?v=14.5" />
 </head>
 <body>
 <div class="app desktop-app" id="app">
@@ -20,7 +20,7 @@
         <button id="scanModeBtn" type="button">掃描表拆圖</button>
       </div>
 
-      <a id="helpBtn" class="help-btn" href="./help.html?v=14.4" target="_blank" rel="noopener noreferrer">❓ 操作教學</a>
+      <a id="helpBtn" class="help-btn" href="./help.html?v=14.5" target="_blank" rel="noopener noreferrer">❓ 操作教學</a>
 
       <div id="faceModelStatus" class="model-status loading" title="MediaPipe Face Landmarker 狀態">
         <span class="model-dot"></span>
@@ -157,9 +157,24 @@
 
       <section class="scan-main-pane">
         <div class="scan-toolbar">
-          <div>
+          <div class="scan-toolbar-title">
             <strong id="scanTitle">掃描表拆圖</strong>
             <span class="small" id="scanHint">加入整張掃描表後，先偵測人臉候選照片。</span>
+          </div>
+
+          <div class="scan-zoom-controls" aria-label="掃描頁縮放">
+            <button id="scanZoomOutBtn" type="button" title="縮小" disabled>−</button>
+            <input id="scanZoomRange"
+                   type="range"
+                   min="5"
+                   max="250"
+                   step="1"
+                   value="100"
+                   aria-label="掃描頁縮放比例"
+                   disabled />
+            <output id="scanZoomVal">100%</output>
+            <button id="scanZoomInBtn" type="button" title="放大" disabled>＋</button>
+            <button id="scanFitZoomBtn" type="button" disabled>適合視窗</button>
           </div>
 
           <div class="scan-toolbar-actions">
@@ -551,6 +566,6 @@
 
 
 
-<script type="module" src="./app.js?v=14.4"></script>
+<script type="module" src="./app.js?v=14.5"></script>
 </body>
 </html>
