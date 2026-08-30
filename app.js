@@ -3170,6 +3170,31 @@
     $('scanSplitStandardizeBtn').disabled=!hasCandidates;
   }
 
+  function updateScanCanvasPlacement(){
+    if(!scanStage||!scanCanvasWrap||scanCanvasWrap.hidden) return;
+
+    const stageStyle=getComputedStyle(scanStage);
+    const padTop=parseFloat(stageStyle.paddingTop)||0;
+    const padBottom=parseFloat(stageStyle.paddingBottom)||0;
+    const availableH=Math.max(
+      0,
+      scanStage.clientHeight-padTop-padBottom
+    );
+
+    // 小圖保持垂直置中；超過可視高度後從頂端開始，
+    // 這樣 scrollTop=0 就一定是真正的圖片最上方。
+    const topGap=scanCanvas.height<availableH
+      ? Math.max(0,(availableH-scanCanvas.height)/2)
+      : 0;
+
+    scanCanvasWrap.style.marginTop=`${Math.round(topGap)}px`;
+    scanCanvasWrap.style.marginBottom=
+      topGap>0 ? `${Math.round(topGap)}px` : '0px';
+
+    // width:max-content + auto horizontal margins：
+    // 小圖水平置中，大圖的 auto margin 會回到 0，左側可完整捲到。
+  }
+
   function getScanFitScale(img){
     if(!img?.naturalWidth||!img?.naturalHeight) return 1;
     const maxW=Math.max(420,(scanStage?.clientWidth||900)-30);
@@ -3275,6 +3300,8 @@
       scanEmpty.hidden=false;
       scanCanvas.width=1;scanCanvas.height=1;
       scanOverlay.width=1;scanOverlay.height=1;
+      scanCanvasWrap.style.marginTop='0px';
+      scanCanvasWrap.style.marginBottom='0px';
       renderScanCandidateList();
       updateScanButtons();
       updateScanZoomControls();
@@ -3304,6 +3331,7 @@
 
     scanCanvasWrap.hidden=false;
     scanEmpty.hidden=true;
+    updateScanCanvasPlacement();
     $('scanTitle').textContent=`掃描表拆圖｜${page.file.name}`;
     $('scanHint').textContent=page.detected
       ? '藍框為自動偵測；綠框為手動新增。勾選後可一次拆分。'
@@ -8194,6 +8222,7 @@
         if(page.zoomMode==='fit'){
           renderScanPage();
         }else{
+          updateScanCanvasPlacement();
           updateScanZoomControls();
         }
       },120);

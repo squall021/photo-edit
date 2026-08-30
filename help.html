@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>會員照片標準化工作站 V14.5｜操作教學</title>
+<title>會員照片標準化工作站 V14.5.1.1｜操作教學</title>
 <style>
 :root{
   --bg:#f3f6fb;
@@ -256,7 +256,7 @@ th{background:#f8fafc}
 
 <header class="topbar">
   <div class="brand">
-    <strong>會員照片標準化工作站 V14.5</strong>
+    <strong>會員照片標準化工作站 V14.5.1.1</strong>
     <span>操作教學與批次處理說明</span>
   </div>
   <div class="top-actions">
@@ -358,7 +358,7 @@ th{background:#f8fafc}
       </div>
 
       <div class="callout green">
-        V14.5 進一步處理「臉抓對，但單邊候選框拉太遠」的情況：
+        V14.5.1.1 進一步處理「臉抓對，但單邊候選框拉太遠」的情況：
         四邊加入最大延伸距離，並搜尋人臉附近的紙本照片邊緣；
         如果某一側出現大面積純白空白會自動收邊，同一掃描頁中尺寸明顯偏大的候選框
         也會依本頁中位尺寸修正。V14.2.1 的鄰臉、格線與拆分後多臉檢查仍全部保留。
@@ -369,12 +369,12 @@ th{background:#f8fafc}
     <section class="section" id="scan-page-manage">
       <h2>掃描頁加入與管理</h2>
       <ul>
-        <li>除了按「＋ 加入掃描頁」，V14.5 也支援直接把一張或多張 JPG / PNG 拖曳到「掃描表拆圖」工作區。</li>
+        <li>除了按「＋ 加入掃描頁」，V14.5.1.1 也支援直接把一張或多張 JPG / PNG 拖曳到「掃描表拆圖」工作區。</li>
         <li>每個掃描頁縮圖右下角都有垃圾桶圖示，可單獨移除該頁。</li>
         <li>左側新增「移除全部掃描頁」，可一次清空目前加入的掃描頁。</li>
       </ul>
       <div class="callout green">
-        V14.5 的下邊界也改成追蹤「肩膀／衣服連續色塊」的結束位置；
+        V14.5.1.1 的下邊界也改成追蹤「肩膀／衣服連續色塊」的結束位置；
         遇到衣服與會員編號／姓名之間的空白帶就停止，不會再因下面的文字重新把候選框往下拉。
       </div>
     </section>
@@ -383,7 +383,7 @@ th{background:#f8fafc}
     <section class="section" id="scan-edge-special">
       <h2>白衣肩膀保護與文字列隔離</h2>
       <p>
-        V14.5 針對兩種特殊情況再加保護：白色／淺色衣服，以及照片下方緊接會員編號、姓名或手寫字。
+        V14.5.1.1 針對兩種特殊情況再加保護：白色／淺色衣服，以及照片下方緊接會員編號、姓名或手寫字。
       </p>
       <ul>
         <li><strong>白衣保護：</strong>若衣服與白底亮度接近，但仍有陰影與紋理，系統不會把它直接當背景；同時保留最低肩膀寬度。</li>
@@ -395,7 +395,7 @@ th{background:#f8fafc}
     <section class="section" id="scan-bottom-structure">
       <h2>照片底邊結構偵測</h2>
       <p>
-        V14.5 不再只靠顏色判斷照片底部，而是分析「大片連續影像 → 空白帶／水平底邊 → 細碎文字」的結構轉換。
+        V14.5.1.1 不再只靠顏色判斷照片底部，而是分析「大片連續影像 → 空白帶／水平底邊 → 細碎文字」的結構轉換。
       </p>
       <ul>
         <li>優先尋找衣服／肩膀連續內容結束後的第一段空白。</li>
@@ -409,7 +409,7 @@ th{background:#f8fafc}
     <section class="section" id="scan-adjustable-box">
       <h2>可調式候選框</h2>
       <p>
-        V14.5 將自動偵測定位改成「初始建議」，不要求每個框都由演算法 100% 貼齊。
+        V14.5.1.1 將自動偵測定位改成「初始建議」，不要求每個框都由演算法 100% 貼齊。
         點選任一候選框後會出現 8 個控制點。
       </p>
       <ul>
@@ -427,8 +427,8 @@ th{background:#f8fafc}
 
 
     <section class="section" id="workflow-v144">
-      <h2>V14.5 一鍵標準化流程</h2>
-      <p>若選用需要去背的流程，V14.5 起會把人物去背移到第一步。</p>
+      <h2>V14.5.1.1 一鍵標準化流程</h2>
+      <p>若選用需要去背的流程，V14.5.1.1 起會把人物去背移到第一步。</p>
       <ol>
         <li><strong>去背／背景判斷：</strong>白底 Preset 會先判斷是否已接近白底；非白底先人物去背並轉白。透明 Preset 直接先透明去背。</li>
         <li><strong>自動轉正：</strong>依雙眼 Landmark 修正小角度傾斜。</li>
@@ -445,13 +445,27 @@ th{background:#f8fafc}
 
     <section class="section" id="scan-zoom">
       <h2>掃描頁縮放</h2>
-      <p>V14.5 在「掃描表拆圖」中央預覽上方加入縮放拉桿。</p>
+      <p>V14.5.1.1 在「掃描表拆圖」中央預覽上方加入縮放拉桿。</p>
       <ul>
         <li>縮放範圍：5%～250%。</li>
         <li>「－ / ＋」每次調整 10%。</li>
         <li>「適合視窗」會重新計算目前掃描頁最適合工作區的比例。</li>
         <li>每一個掃描頁會記住自己的縮放比例，切換頁面後不會互相影響。</li>
         <li>縮放只影響畫面顯示與候選框操作，不改變原掃描圖片或拆圖輸出解析度。</li>
+      </ul>
+    </section>
+
+
+    <section class="section" id="scan-zoom-overflow-fix">
+      <h2>放大後捲動範圍</h2>
+      <p>
+        V14.5.1 修正掃描頁放大後，上半部可能因「垂直置中」而跑到捲軸可到達範圍之外的問題。
+      </p>
+      <ul>
+        <li>掃描圖小於工作區時仍會置中顯示。</li>
+        <li>放大後若高度超過工作區，圖片會從可捲動區最上方開始。</li>
+        <li>把垂直捲軸拉到最上面時，可看到真正的掃描圖頂端。</li>
+        <li>水平捲動也採相同原則，放大的圖片左側不會被置中到不可達位置。</li>
       </ul>
     </section>
 
@@ -733,7 +747,7 @@ th{background:#f8fafc}
     <div class="footer">
       會員照片標準化工作站 V13 操作教學｜與圖片編輯器放在同一個 GitHub Pages 專案即可
     </div>
-        <div class="callout green">V14.5 新增下半部衣服／肩膀導向收邊。</div>
+        <div class="callout green">V14.5.1.1 新增下半部衣服／肩膀導向收邊。</div>
     </main>
 </div>
 </body>

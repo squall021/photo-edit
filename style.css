@@ -939,9 +939,7 @@ a.help-btn:hover{
   flex:1;
   min-height:0;
   overflow:auto;
-  display:flex;
-  align-items:center;
-  justify-content:center;
+  display:block;
   padding:12px;
   background:
     linear-gradient(45deg,#f8fafc 25%,transparent 25%),
@@ -960,6 +958,10 @@ a.help-btn:hover{
 
 .scan-canvas-wrap{
   position:relative;
+  width:max-content;
+  height:max-content;
+  margin-left:auto;
+  margin-right:auto;
   line-height:0;
   box-shadow:0 8px 28px rgba(15,23,42,.12);
 }
@@ -1310,3 +1312,13 @@ a.help-btn:hover{
     width:auto;
   }
 }
+
+
+/* ============================================================
+   V14.5.1 — 放大後頂端可完整捲動
+   ============================================================ */
+/*
+  不再用 flex align-items:center 置中超大 canvas。
+  超過工作區時，marginTop 會由 JS 設為 0；
+  小於工作區時，才用正值 marginTop 保持垂直置中。
+*/
