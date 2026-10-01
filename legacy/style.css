@@ -1,0 +1,1324 @@
+:root{
+    --bg:#f3f5f7;
+    --panel:#ffffff;
+    --line:#d9dee5;
+    --text:#1f2937;
+    --muted:#6b7280;
+    --accent:#2563eb;
+    --danger:#b91c1c;
+    --shadow:0 8px 24px rgba(15,23,42,.08);
+    --radius:14px;
+  }
+*{box-sizing:border-box}
+html,body{width:100%;height:100%;margin:0;overflow:hidden}
+body{
+  font-family:"Microsoft JhengHei","PingFang TC",system-ui,-apple-system,sans-serif;
+  background:var(--bg);color:var(--text);font-size:14px;
+}
+button,select,input[type="number"]{
+  min-height:38px;border:1px solid #cfd6df;background:#fff;color:var(--text);
+  border-radius:9px;padding:7px 11px;font:inherit;
+}
+button{cursor:pointer;font-weight:700}
+button:hover:not(:disabled){border-color:#9aa7b7;background:#f8fafc}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.danger{color:var(--danger)}
+button.active{outline:3px solid rgba(37,99,235,.15);border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:not-allowed}
+select,input[type="number"]{width:100%}
+input[type="range"]{width:100%}
+h1,h2{margin:0}
+h2{font-size:15px}
+.small{font-size:12px;color:var(--muted);line-height:1.55}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.label{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;margin-bottom:5px}
+.label output{color:var(--muted);min-width:55px;text-align:right}
+.value-grid{display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center}
+.value-grid span{color:var(--muted);text-align:center}
+
+.desktop-app{
+  width:100vw;height:100vh;max-width:100vw;
+  display:grid;grid-template-rows:auto minmax(0,1fr) 30px;overflow:hidden;
+}
+.titlebar{
+  min-width:0;z-index:100;background:#fff;border-bottom:1px solid var(--line);
+  box-shadow:0 3px 12px rgba(15,23,42,.06);
+}
+.brand-row{
+  min-height:48px;padding:7px 14px 5px;display:flex;align-items:center;gap:14px;min-width:0;
+}
+.brand-row h1{
+  margin-right:auto;font-size:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.mode-switch{
+  display:flex;gap:4px;padding:3px;background:#eef2f7;border:1px solid var(--line);
+  border-radius:10px;flex:0 0 auto;
+}
+.mode-switch button{min-height:34px;border:0;background:transparent;padding:5px 11px}
+.mode-switch button.active{background:#fff;box-shadow:0 1px 5px rgba(15,23,42,.12);outline:none}
+.model-status{
+  display:flex;align-items:center;gap:7px;min-height:32px;padding:4px 9px;
+  border:1px solid var(--line);border-radius:10px;background:#f8fafc;
+  font-size:11px;color:#475569;white-space:nowrap;flex:0 0 auto;
+}
+.model-dot{width:9px;height:9px;border-radius:999px;background:#94a3b8;flex:0 0 auto}
+.model-status.loading .model-dot{background:#f59e0b}
+.model-status.ready .model-dot{background:#10b981}
+.model-status.error .model-dot{background:#ef4444}
+.model-status.fallback .model-dot{background:#8b5cf6}
+
+/* Office-style Ribbon */
+.ribbon-tabbar{
+  height:34px;padding:0 12px;display:flex;align-items:flex-end;gap:2px;
+  border-top:1px solid #eef2f7;border-bottom:1px solid var(--line);background:#f8fafc;
+}
+.ribbon-tab{
+  width:auto;min-height:31px;padding:5px 18px;border:0;border-radius:8px 8px 0 0;
+  background:transparent;font-weight:700;color:#475569;
+}
+.ribbon-tab.active{
+  background:#fff;color:var(--accent);border:1px solid var(--line);border-bottom-color:#fff;outline:none;
+}
+.ribbon-content{height:58px;min-width:0;overflow:hidden;background:#fff}
+.ribbon-panel{
+  display:none;height:100%;min-width:0;align-items:stretch;gap:0;padding:5px 10px;
+  overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;
+}
+.ribbon-panel.active{display:flex}
+.ribbon-group{
+  min-width:0;display:flex;align-items:stretch;gap:6px;
+  padding:0 10px;border-right:1px solid var(--line);flex:0 0 auto;
+}
+.ribbon-group:first-child{padding-left:2px}
+.ribbon-group:last-child{border-right:0}
+.ribbon-group-title{
+  display:flex;align-items:center;font-size:11px;font-weight:700;color:#64748b;
+  padding-right:2px;white-space:nowrap;
+}
+.ribbon-commands{display:flex;align-items:center;gap:6px;min-width:0}
+.ribbon-commands button{width:auto;min-height:38px;padding:6px 10px;white-space:nowrap}
+.zoom-ribbon input[type="range"]{width:150px}
+.zoom-ribbon output{min-width:48px;text-align:center;font-weight:700;color:#334155}
+
+/* Fixed workspace */
+.workspace{
+  width:100%;max-width:100%;min-width:0;min-height:0;height:100%;
+  display:grid;grid-template-columns:minmax(205px,240px) minmax(0,1fr) minmax(270px,310px);
+  gap:8px;padding:8px;overflow:hidden;transition:grid-template-columns .18s ease;
+}
+.desktop-app.left-collapsed .workspace{grid-template-columns:0 minmax(0,1fr) minmax(270px,310px)}
+.desktop-app.right-collapsed .workspace{grid-template-columns:minmax(205px,240px) minmax(0,1fr) 0}
+.desktop-app.left-collapsed.right-collapsed .workspace{grid-template-columns:0 minmax(0,1fr) 0}
+.workspace-pane{
+  width:100%;max-width:100%;min-width:0;min-height:0;height:100%;
+  background:#fff;border:1px solid var(--line);border-radius:11px;
+  box-shadow:0 4px 16px rgba(15,23,42,.055);overflow:hidden;
+}
+.desktop-app.left-collapsed .left-pane,
+.desktop-app.right-collapsed .right-pane{opacity:0;pointer-events:none;border:0}
+
+.left-pane{display:flex;flex-direction:column;padding:10px}
+.pane-heading{
+  min-height:34px;padding-bottom:7px;border-bottom:1px solid var(--line);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.batch-panel{display:flex;flex-direction:column;min-height:0;flex:1}
+.single-info-panel{display:flex;flex-direction:column;gap:10px;min-height:0}
+.compact-summary{display:flex;gap:9px;margin-top:4px;font-size:11px;color:var(--muted)}
+.batch-progress{
+  display:none;margin:8px 0;padding:8px;border-radius:9px;background:#eff6ff;
+  border:1px solid #bfdbfe;color:#1e40af;font-size:11px;line-height:1.45;
+}
+.batch-progress.show{display:block}
+.batch-list{
+  flex:1;min-height:0;overflow:auto;display:grid;align-content:start;gap:6px;padding:1px 2px 5px 0;
+}
+.batch-item{
+  display:grid;grid-template-columns:48px minmax(0,1fr);gap:8px;align-items:center;
+  border:1px solid var(--line);border-radius:9px;padding:5px;cursor:pointer;background:#fff;
+}
+.batch-item:hover{border-color:#9aa7b7}
+.batch-item.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(37,99,235,.11);background:#eff6ff}
+.batch-thumb{width:48px;height:48px;object-fit:cover;border-radius:6px;background:#e5e7eb}
+.batch-item-main{min-width:0}
+.batch-name{font-size:11px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.batch-status{
+  display:inline-block;margin-top:3px;padding:2px 6px;border-radius:999px;
+  background:#eef2f7;color:#475569;font-size:10px;
+}
+.batch-status.adjusted{background:#fff7ed;color:#9a3412}
+.batch-status.done{background:#ecfdf5;color:#047857}
+.meta{
+  background:#f8fafc;border:1px solid var(--line);border-radius:9px;
+  padding:9px;font-size:12px;line-height:1.6;overflow-wrap:anywhere;
+}
+.side-note{
+  border-left:3px solid #93c5fd;padding:7px 8px;background:#eff6ff;
+  border-radius:7px;font-size:11px;color:#475569;line-height:1.5;
+}
+
+.stage-panel{display:flex;flex-direction:column;padding:9px;min-width:0}
+.stage-top{
+  flex:0 0 auto;min-height:32px;display:flex;justify-content:space-between;
+  align-items:center;gap:10px;padding:0 3px 7px;overflow:hidden;
+}
+.stage-top strong,.stage-top .small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stage{
+  width:100%;max-width:100%;min-width:0;flex:1;min-height:0;height:auto;max-height:none;
+  background:
+    linear-gradient(45deg,#e8ebef 25%,transparent 25%),
+    linear-gradient(-45deg,#e8ebef 25%,transparent 25%),
+    linear-gradient(45deg,transparent 75%,#e8ebef 75%),
+    linear-gradient(-45deg,transparent 75%,#e8ebef 75%);
+  background-size:22px 22px;background-position:0 0,0 11px,11px -11px,-11px 0;
+  border:1px solid var(--line);border-radius:10px;
+  display:flex;align-items:flex-start;justify-content:flex-start;
+  overflow:auto;position:relative;padding:14px;contain:layout paint;
+}
+.canvas-wrap{
+  position:relative;display:inline-block;flex:0 0 auto;margin:auto;line-height:0;
+  box-shadow:0 8px 24px rgba(0,0,0,.18);background:#fff;
+}
+canvas{display:block;max-width:none;height:auto;user-select:none;touch-action:none}
+#overlay{position:absolute;inset:0;pointer-events:none}
+.empty{margin:auto;text-align:center;color:var(--muted);padding:28px;line-height:1.7}
+.drop-active .stage{outline:4px solid rgba(37,99,235,.16);border-color:var(--accent)}
+
+.right-pane{display:flex;flex-direction:column;min-width:0}
+.tool-tabs{
+  flex:0 0 auto;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:3px;
+  padding:7px;border-bottom:1px solid var(--line);background:#f8fafc;
+}
+.tool-tab{min-height:34px;padding:4px 5px;border:1px solid transparent;background:transparent;font-size:12px}
+.tool-tab.active{
+  background:#fff;border-color:var(--line);color:var(--accent);
+  box-shadow:0 1px 5px rgba(15,23,42,.08);outline:none;
+}
+.tool-scroll{flex:1;min-height:0;overflow:auto;padding:10px}
+.tool-pane{display:none}
+.tool-pane.active{display:grid;gap:9px;align-content:start}
+.tool-pane>h2{padding:2px 1px}
+.tool-card{
+  display:grid;gap:10px;padding:10px;border:1px solid var(--line);
+  border-radius:10px;background:#fff;
+}
+.mp-note{
+  padding:8px 9px;background:#f0fdf4;border:1px solid #bbf7d0;
+  border-radius:8px;font-size:11px;color:#166534;line-height:1.5;
+}
+
+.statusbar{
+  min-height:30px;display:flex;align-items:center;gap:18px;padding:0 12px;
+  border-top:1px solid var(--line);background:#fff;color:var(--muted);
+  font-size:11px;overflow:hidden;
+}
+.statusbar span{white-space:nowrap}
+
+@media (max-width:1450px){
+  .workspace{grid-template-columns:210px minmax(0,1fr) 285px;gap:6px;padding:6px}
+  .desktop-app.left-collapsed .workspace{grid-template-columns:0 minmax(0,1fr) 285px}
+  .desktop-app.right-collapsed .workspace{grid-template-columns:210px minmax(0,1fr) 0}
+  .brand-row{padding-left:10px;padding-right:10px}
+  .brand-row h1{font-size:18px}
+  .ribbon-group{padding-left:7px;padding-right:7px}
+  .ribbon-commands button{padding-left:8px;padding-right:8px}
+}
+
+@media (max-width:1050px){
+  html,body{overflow:auto}
+  .desktop-app{width:100%;height:auto;min-height:100vh;grid-template-rows:auto auto auto}
+  .workspace,
+  .desktop-app.left-collapsed .workspace,
+  .desktop-app.right-collapsed .workspace,
+  .desktop-app.left-collapsed.right-collapsed .workspace{
+    height:auto;grid-template-columns:1fr;overflow:visible;
+  }
+  .workspace-pane{height:auto;min-height:0}
+  .stage-panel{height:62vh;min-height:440px}
+  .batch-list{max-height:340px}
+  .tool-scroll{max-height:540px}
+  .desktop-app.left-collapsed .left-pane,
+  .desktop-app.right-collapsed .right-pane{display:none}
+  .brand-row{flex-wrap:wrap}
+  .brand-row h1{width:100%;font-size:18px}
+  .ribbon-content{height:64px}
+}
+
+/* V12.4: photo zoom always visible */
+.stage-top{min-height:44px}
+.stage-zoom{
+  display:flex;align-items:center;gap:5px;flex:0 0 auto;margin-left:auto;
+}
+.stage-zoom button{
+  width:auto;min-width:34px;min-height:32px;padding:4px 8px;
+}
+.stage-zoom input[type="range"]{width:105px}
+.stage-zoom output{
+  min-width:45px;text-align:center;font-size:12px;font-weight:700;color:#334155;
+}
+
+/* V12.5: crop confirmation is a true overlay.
+   It is removed from the Stage flex flow, so showing it never moves the photo. */
+.crop-action-bar{
+  position:absolute;
+  top:12px;
+  left:50%;
+  transform:translateX(-50%);
+  z-index:30;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  width:max-content;
+  max-width:calc(100% - 24px);
+  margin:0;
+  padding:7px 9px;
+  border:1px solid #93c5fd;
+  border-radius:11px;
+  background:rgba(255,255,255,.96);
+  box-shadow:0 6px 18px rgba(15,23,42,.16);
+  color:#1e3a8a;
+  font-size:12px;
+  font-weight:700;
+  backdrop-filter:blur(5px);
+}
+.crop-action-bar[hidden]{display:none}
+.crop-action-bar button{
+  width:auto;min-height:34px;padding:5px 10px;
+}
+
+.tool-tabs{grid-template-columns:repeat(6,minmax(0,1fr))}
+.tool-tab{padding-left:2px;padding-right:2px}
+
+@media (max-width:1450px){
+  .stage-top{flex-wrap:wrap;row-gap:5px}
+  .stage-top .small{flex:1 1 300px}
+  .stage-zoom{margin-left:auto}
+}
+@media (max-width:1150px){
+  .stage-zoom input[type="range"]{width:80px}
+  .stage-zoom #fitZoomBtn{display:none}
+}
+
+@media (max-width:1200px){
+  .crop-action-bar > span{display:none}
+}
+
+
+/* ============================================================
+   V12.8 — stable 3-column Batch Ribbon
+   ============================================================ */
+
+.ribbon-content{
+  transition:height .16s ease;
+}
+
+.desktop-app.batch-ribbon-expanded .ribbon-content{
+  height:104px;
+}
+
+/* Override generic .ribbon-panel flex only for the batch panel. */
+.batch-ribbon-panel.active{
+  display:grid;
+  grid-template-columns:max-content minmax(500px,1fr) max-content;
+  align-items:stretch;
+  gap:0;
+  width:100%;
+  min-width:0;
+  padding:6px 10px;
+  overflow-x:hidden;
+  overflow-y:hidden;
+}
+
+.batch-ribbon-group{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:6px;
+  padding:1px 14px 3px;
+  border-right:1px solid var(--line);
+}
+
+.batch-ribbon-group:first-child{
+  padding-left:2px;
+}
+
+.batch-ribbon-group:last-child{
+  border-right:0;
+  padding-right:2px;
+}
+
+.batch-ribbon-title{
+  font-size:11px;
+  line-height:1;
+  font-weight:700;
+  color:#64748b;
+  white-space:nowrap;
+}
+
+.batch-command-row{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  min-width:0;
+}
+
+.batch-command-row button,
+.batch-process-grid button{
+  width:auto;
+  min-height:36px;
+  padding:6px 11px;
+  white-space:nowrap;
+}
+
+.batch-process-grid{
+  width:100%;
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  grid-template-rows:36px 36px;
+  gap:6px 7px;
+  align-content:center;
+}
+
+.batch-process-grid button{
+  width:100%;
+  min-width:0;
+}
+
+/* The two background-removal buttons occupy the second row. */
+.batch-process-grid #batchBgWhiteBtn{
+  grid-column:1;
+}
+
+.batch-process-grid #batchBgTransparentBtn{
+  grid-column:2;
+}
+
+/* Typical 1366/1440 desktop widths: trim side groups but never hide them. */
+@media (max-width:1500px){
+  .batch-ribbon-panel.active{
+    grid-template-columns:max-content minmax(430px,1fr) max-content;
+    padding-left:6px;
+    padding-right:6px;
+  }
+
+  .batch-ribbon-group{
+    padding-left:8px;
+    padding-right:8px;
+  }
+
+  .batch-command-row{
+    gap:5px;
+  }
+
+  .batch-command-row button,
+  .batch-process-grid button{
+    padding-left:8px;
+    padding-right:8px;
+  }
+}
+
+/* If the viewport is narrower, the Batch Ribbon itself may scroll horizontally.
+   Groups remain visible and text size is never reduced. */
+@media (max-width:1180px){
+  .batch-ribbon-panel.active{
+    grid-template-columns:max-content 430px max-content;
+    overflow-x:auto;
+  }
+}
+
+/* Very wide screens: give the processing group room without stretching buttons oddly. */
+@media (min-width:1800px){
+  .batch-ribbon-panel.active{
+    grid-template-columns:max-content minmax(620px,900px) max-content;
+  }
+}
+
+
+/* V12.11 操作教學 */
+.help-btn{
+  width:auto;
+  min-height:34px;
+  padding:5px 12px;
+  white-space:nowrap;
+  flex:0 0 auto;
+  background:#fff;
+  border-color:#cfd6df;
+}
+
+.help-modal{
+  position:fixed;
+  inset:0;
+  z-index:1000;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:22px;
+}
+
+.help-modal[hidden]{
+  display:none;
+}
+
+.help-backdrop{
+  position:absolute;
+  inset:0;
+  background:rgba(15,23,42,.46);
+  backdrop-filter:blur(2px);
+}
+
+.help-dialog{
+  position:relative;
+  width:min(760px,calc(100vw - 36px));
+  max-height:min(780px,calc(100vh - 44px));
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:#fff;
+  box-shadow:0 24px 60px rgba(15,23,42,.28);
+}
+
+.help-dialog-header{
+  flex:0 0 auto;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  padding:18px 20px 14px;
+  border-bottom:1px solid var(--line);
+  background:#f8fafc;
+}
+
+.help-dialog-header h2{
+  font-size:20px;
+}
+
+.help-close-btn{
+  width:38px;
+  height:38px;
+  min-height:38px;
+  padding:0;
+  font-size:17px;
+}
+
+.help-dialog-body{
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  padding:18px 20px;
+  display:grid;
+  gap:12px;
+}
+
+.help-step{
+  display:grid;
+  grid-template-columns:36px minmax(0,1fr);
+  gap:12px;
+  align-items:start;
+  padding:12px;
+  border:1px solid #e2e8f0;
+  border-radius:11px;
+  background:#fff;
+}
+
+.help-step-num{
+  width:34px;
+  height:34px;
+  display:grid;
+  place-items:center;
+  border-radius:999px;
+  background:#eff6ff;
+  color:#1d4ed8;
+  font-weight:800;
+}
+
+.help-step strong{
+  display:block;
+  margin:2px 0 4px;
+}
+
+.help-step p{
+  margin:0;
+  color:#475569;
+  font-size:13px;
+  line-height:1.6;
+}
+
+.help-tip{
+  padding:12px 14px;
+  border:1px solid #bbf7d0;
+  border-radius:10px;
+  background:#f0fdf4;
+  color:#166534;
+  font-size:13px;
+  line-height:1.6;
+}
+
+.help-dialog-footer{
+  flex:0 0 auto;
+  display:flex;
+  justify-content:flex-end;
+  padding:12px 20px;
+  border-top:1px solid var(--line);
+  background:#fff;
+}
+
+.help-dialog-footer button{
+  width:auto;
+  min-width:100px;
+}
+
+@media (max-width:700px){
+  .help-btn{
+    padding-left:9px;
+    padding-right:9px;
+  }
+
+  .help-dialog{
+    width:calc(100vw - 24px);
+    max-height:calc(100vh - 24px);
+  }
+}
+
+
+/* ============================================================
+   V13 — Member photo standardization workstation
+   ============================================================ */
+
+.v13-workflow-group .ribbon-commands{
+  flex-wrap:wrap;
+}
+
+.batch-workflow-controls{
+  flex:0 0 auto;
+  display:grid;
+  gap:6px;
+  padding:8px 0;
+  border-bottom:1px solid var(--line);
+}
+
+.batch-workflow-controls select,
+.batch-workflow-controls input{
+  min-height:34px;
+  font-size:12px;
+}
+
+.batch-workflow-buttons{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:6px;
+}
+
+.batch-workflow-buttons button{
+  min-height:34px;
+  padding:5px 7px;
+  font-size:11px;
+}
+
+.batch-workflow-buttons input{
+  width:100%;
+  min-width:0;
+}
+
+.batch-item.state-pass{border-left:4px solid #10b981}
+.batch-item.state-review{border-left:4px solid #f59e0b}
+.batch-item.state-manual{border-left:4px solid #ef4444}
+.batch-item.state-processing{border-left:4px solid #3b82f6}
+
+.batch-status.pass{background:#ecfdf5;color:#047857}
+.batch-status.review{background:#fffbeb;color:#b45309}
+.batch-status.manual{background:#fef2f2;color:#b91c1c}
+.batch-status.processing{background:#eff6ff;color:#1d4ed8}
+
+.session-restore-bar{
+  flex:0 0 auto;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-bottom:7px;
+  padding:7px 9px;
+  border:1px solid #bfdbfe;
+  border-radius:10px;
+  background:#eff6ff;
+  color:#1e3a8a;
+  font-size:12px;
+}
+.session-restore-bar[hidden]{display:none}
+.session-restore-bar span{margin-right:auto}
+.session-restore-bar button{
+  width:auto;
+  min-height:32px;
+  padding:4px 8px;
+}
+
+.quality-summary{
+  padding:11px 12px;
+  border-radius:10px;
+  border:1px solid var(--line);
+  font-weight:800;
+  text-align:center;
+}
+.quality-summary.idle{background:#f8fafc;color:#64748b}
+.quality-summary.pass{background:#ecfdf5;border-color:#a7f3d0;color:#047857}
+.quality-summary.warn{background:#fffbeb;border-color:#fde68a;color:#b45309}
+.quality-summary.fail{background:#fef2f2;border-color:#fecaca;color:#b91c1c}
+
+.quality-list{
+  display:grid;
+  gap:6px;
+}
+.quality-row{
+  display:grid;
+  grid-template-columns:22px minmax(0,1fr) auto;
+  gap:7px;
+  align-items:center;
+  padding:7px 8px;
+  border:1px solid #e2e8f0;
+  border-radius:8px;
+  font-size:12px;
+}
+.quality-row .quality-value{color:#64748b;text-align:right}
+.quality-icon.pass{color:#059669}
+.quality-icon.warn{color:#d97706}
+.quality-icon.fail{color:#dc2626}
+
+.engine-info{
+  display:grid;
+  gap:7px;
+}
+.engine-info > div{
+  display:flex;
+  justify-content:space-between;
+  gap:8px;
+  padding:7px 8px;
+  border:1px solid #e2e8f0;
+  border-radius:8px;
+  font-size:12px;
+}
+.engine-info b{color:#475569}
+
+/* Background mask refinement */
+.mask-active #preview{
+  cursor:crosshair !important;
+}
+
+/* Before/After slider */
+.compare-slider-active #preview{
+  cursor:col-resize !important;
+}
+
+.workflow-toast{
+  position:absolute;
+  left:50%;
+  bottom:18px;
+  transform:translateX(-50%);
+  z-index:35;
+  max-width:min(680px,calc(100% - 30px));
+  padding:9px 13px;
+  border:1px solid #93c5fd;
+  border-radius:10px;
+  background:rgba(255,255,255,.96);
+  box-shadow:0 8px 26px rgba(15,23,42,.18);
+  color:#1e3a8a;
+  font-size:12px;
+  font-weight:700;
+  text-align:center;
+}
+.workflow-toast[hidden]{display:none}
+
+@media (max-width:1450px){
+  .v13-workflow-group .ribbon-commands button{
+    padding-left:7px;
+    padding-right:7px;
+  }
+}
+
+
+/* V13.1 — operation guide is now a standalone GitHub Pages page */
+a.help-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  text-decoration:none;
+  color:inherit;
+  box-sizing:border-box;
+}
+
+a.help-btn:hover{
+  text-decoration:none;
+}
+
+
+/* ============================================================
+   V13.2 — Manual straighten
+   ============================================================ */
+.manual-rotate-panel{
+  display:grid;
+  gap:8px;
+  padding:9px;
+  border:1px solid #dbeafe;
+  border-radius:9px;
+  background:#f8fbff;
+}
+
+.manual-rotate-step-row{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:6px;
+}
+
+.manual-rotate-step-row button{
+  min-height:32px;
+  padding:4px 6px;
+  font-size:11px;
+}
+
+.manual-rotate-preview .canvas-wrap{
+  transition:transform .08s linear;
+  will-change:transform;
+}
+
+.manual-rotate-preview .stage{
+  overflow:auto;
+}
+
+#manualRotateVal{
+  min-width:52px;
+  text-align:right;
+  font-variant-numeric:tabular-nums;
+}
+
+
+/* ============================================================
+   V14 — 掃描表拆圖
+   ============================================================ */
+
+.app.scan-active .ribbon-tabbar,
+.app.scan-active .ribbon-content{
+  display:none;
+}
+
+.workspace.scan-mode{
+  grid-template-columns:1fr;
+}
+
+.workspace.scan-mode > #leftPane,
+.workspace.scan-mode > #dropZone,
+.workspace.scan-mode > #rightPane{
+  display:none !important;
+}
+
+.scan-workspace{
+  min-width:0;
+  min-height:0;
+  display:grid;
+  grid-template-columns:230px minmax(0,1fr) 300px;
+  gap:10px;
+  height:100%;
+  padding:10px;
+}
+
+.scan-workspace[hidden]{
+  display:none;
+}
+
+.scan-pages-pane,
+.scan-main-pane,
+.scan-results-pane{
+  min-width:0;
+  min-height:0;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:#fff;
+  overflow:hidden;
+}
+
+.scan-pages-pane,
+.scan-results-pane{
+  display:flex;
+  flex-direction:column;
+  padding:10px;
+}
+
+.scan-side-actions{
+  display:grid;
+  gap:6px;
+  flex:0 0 auto;
+  margin-bottom:8px;
+}
+
+.scan-side-actions button{
+  min-height:34px;
+}
+
+.scan-pages-list{
+  min-height:0;
+  overflow:auto;
+  display:grid;
+  gap:7px;
+}
+
+.scan-page-item{
+  display:grid;
+  grid-template-columns:56px minmax(0,1fr);
+  gap:8px;
+  align-items:center;
+  padding:6px;
+  border:1px solid #e2e8f0;
+  border-radius:9px;
+  cursor:pointer;
+  background:#fff;
+}
+
+.scan-page-item.active{
+  border-color:#60a5fa;
+  box-shadow:0 0 0 2px rgba(37,99,235,.10);
+  background:#eff6ff;
+}
+
+.scan-page-thumb{
+  width:56px;
+  height:72px;
+  object-fit:cover;
+  border-radius:5px;
+  border:1px solid #e2e8f0;
+  background:#f8fafc;
+}
+
+.scan-page-name{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:12px;
+  font-weight:700;
+}
+
+.scan-page-state{
+  margin-top:3px;
+  color:#64748b;
+  font-size:11px;
+}
+
+.scan-main-pane{
+  display:flex;
+  flex-direction:column;
+}
+
+.scan-toolbar{
+  flex:0 0 auto;
+  min-height:54px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:8px 10px;
+  border-bottom:1px solid var(--line);
+  background:#f8fafc;
+}
+
+.scan-toolbar > div:first-child{
+  min-width:0;
+}
+
+.scan-toolbar-actions{
+  margin-left:auto;
+  display:flex;
+  gap:6px;
+}
+
+.scan-toolbar-actions button{
+  width:auto;
+  min-height:34px;
+  padding:5px 8px;
+  white-space:nowrap;
+}
+
+.scan-stage{
+  position:relative;
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  display:block;
+  padding:12px;
+  background:
+    linear-gradient(45deg,#f8fafc 25%,transparent 25%),
+    linear-gradient(-45deg,#f8fafc 25%,transparent 25%),
+    linear-gradient(45deg,transparent 75%,#f8fafc 75%),
+    linear-gradient(-45deg,transparent 75%,#f8fafc 75%);
+  background-size:28px 28px;
+  background-position:0 0,0 14px,14px -14px,-14px 0;
+}
+
+.scan-empty{
+  color:#64748b;
+  text-align:center;
+  font-size:13px;
+}
+
+.scan-canvas-wrap{
+  position:relative;
+  width:max-content;
+  height:max-content;
+  margin-left:auto;
+  margin-right:auto;
+  line-height:0;
+  box-shadow:0 8px 28px rgba(15,23,42,.12);
+}
+
+.scan-canvas-wrap canvas{
+  display:block;
+}
+
+#scanOverlay{
+  position:absolute;
+  inset:0;
+  cursor:default;
+}
+
+.scan-progress{
+  flex:0 0 auto;
+  min-height:31px;
+  padding:6px 10px;
+  border-top:1px solid var(--line);
+  color:#475569;
+  background:#fff;
+  font-size:12px;
+}
+
+.scan-result-note{
+  flex:0 0 auto;
+  margin-bottom:8px;
+  padding:8px 9px;
+  border:1px solid #bfdbfe;
+  border-radius:8px;
+  background:#eff6ff;
+  color:#1e3a8a;
+  font-size:11px;
+  line-height:1.55;
+}
+
+.scan-candidates-list{
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  display:grid;
+  align-content:start;
+  gap:6px;
+}
+
+.scan-candidate-item{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  gap:7px;
+  align-items:center;
+  padding:7px;
+  border:1px solid #e2e8f0;
+  border-radius:8px;
+  background:#fff;
+  cursor:pointer;
+}
+
+.scan-candidate-item.active{
+  border-color:#60a5fa;
+  background:#eff6ff;
+}
+
+.scan-candidate-name{
+  font-size:12px;
+  font-weight:750;
+}
+
+.scan-candidate-meta{
+  color:#64748b;
+  font-size:10px;
+}
+
+.scan-candidate-badge{
+  padding:2px 6px;
+  border-radius:999px;
+  font-size:10px;
+  font-weight:800;
+  background:#f1f5f9;
+  color:#475569;
+}
+
+.scan-export-actions{
+  flex:0 0 auto;
+  display:grid;
+  gap:7px;
+  margin-top:9px;
+}
+
+.scan-export-actions button{
+  min-height:38px;
+}
+
+@media (max-width:1250px){
+  .scan-workspace{
+    grid-template-columns:190px minmax(560px,1fr) 260px;
+    overflow-x:auto;
+  }
+}
+
+/* V14：會員照構圖以頭頂定位為主，不用垂直人臉置中 */
+.quality-row[data-quality-key="headTop"]{
+  border-color:#bfdbfe;
+}
+
+
+/* ============================================================
+   V14.2.1 — 智慧防重疊候選框
+   ============================================================ */
+.scan-candidate-badge.safe{
+  background:#ecfdf5;
+  color:#047857;
+}
+
+.scan-candidate-badge.review{
+  background:#fffbeb;
+  color:#b45309;
+}
+
+.scan-candidate-item.risk{
+  border-color:#fde68a;
+  background:#fffdf5;
+}
+
+
+/* V14.2.3 候選框邊界精修 */
+.scan-candidate-item.refined{
+  box-shadow:inset 3px 0 0 #0ea5e9;
+}
+.scan-candidate-badge.refined{
+  background:#ecfeff;
+  color:#0e7490;
+}
+
+
+/* ============================================================
+   V14.2.4 — 掃描頁拖曳加入 / 刪除控制
+   ============================================================ */
+.scan-drop-mini{
+  flex:0 0 auto;
+  margin:-1px 0 8px;
+  padding:7px 8px;
+  border:1px dashed #bfdbfe;
+  border-radius:8px;
+  background:#f8fbff;
+  color:#64748b;
+  font-size:10px;
+  line-height:1.45;
+  text-align:center;
+}
+
+.scan-page-item{
+  position:relative;
+}
+
+.scan-page-thumb-wrap{
+  position:relative;
+  width:56px;
+  height:72px;
+}
+
+.scan-page-thumb-wrap .scan-page-thumb{
+  display:block;
+}
+
+.scan-page-remove{
+  position:absolute;
+  right:5px;
+  bottom:5px;
+  z-index:3;
+  width:24px;
+  height:24px;
+  min-height:0 !important;
+  padding:0 !important;
+  display:grid;
+  place-items:center;
+  border:1px solid rgba(255,255,255,.95) !important;
+  border-radius:999px !important;
+  background:#fff !important;
+  color:#dc2626 !important;
+  box-shadow:0 2px 7px rgba(15,23,42,.20);
+  font-size:12px !important;
+  line-height:1;
+  cursor:pointer;
+}
+
+.scan-page-remove:hover{
+  background:#fef2f2 !important;
+  transform:scale(1.06);
+}
+
+.scan-side-actions .danger-soft{
+  border-color:#fecaca;
+  color:#b91c1c;
+  background:#fff;
+}
+
+.scan-side-actions .danger-soft:hover:not(:disabled){
+  background:#fef2f2;
+}
+
+.scan-stage.drag-over{
+  outline:3px solid rgba(37,99,235,.35);
+  outline-offset:-5px;
+  background-color:#eff6ff;
+}
+
+.scan-drop-overlay{
+  position:absolute;
+  inset:12px;
+  z-index:20;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  border:2px dashed #2563eb;
+  border-radius:14px;
+  background:rgba(239,246,255,.94);
+  color:#1d4ed8;
+  text-align:center;
+  pointer-events:none;
+}
+
+.scan-drop-overlay[hidden]{
+  display:none;
+}
+
+.scan-drop-overlay-icon{
+  width:46px;
+  height:46px;
+  display:grid;
+  place-items:center;
+  border-radius:999px;
+  background:#2563eb;
+  color:#fff;
+  font-size:28px;
+  font-weight:500;
+}
+
+.scan-drop-overlay span{
+  color:#64748b;
+  font-size:11px;
+}
+
+
+/* ============================================================
+   V14.3 — 可調式候選框
+   ============================================================ */
+#scanOverlay{
+  touch-action:none;
+}
+
+.scan-candidate-item.manual-adjusted{
+  box-shadow:inset 3px 0 0 #8b5cf6;
+}
+
+.scan-candidate-badge.manual-adjusted{
+  background:#f5f3ff;
+  color:#6d28d9;
+}
+
+
+/* ============================================================
+   V14.4 — 單張 / 批次左側功能嚴格分離
+   ============================================================ */
+#batchPanel[hidden],
+#singleInfoPanel[hidden]{
+  display:none !important;
+}
+
+/* 即使瀏覽器對 hidden 屬性的 CSS 行為不同，也強制模式隔離。 */
+.desktop-app:not(.batch-active) #batchPanel{
+  display:none !important;
+}
+
+.desktop-app.batch-active #singleInfoPanel{
+  display:none !important;
+}
+
+
+/* ============================================================
+   V14.5 — 掃描表拆圖縮放控制
+   ============================================================ */
+.scan-toolbar-title{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+
+.scan-zoom-controls{
+  margin-left:auto;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex:0 0 auto;
+}
+
+.scan-zoom-controls button{
+  width:auto;
+  min-width:34px;
+  min-height:34px;
+  padding:4px 8px;
+  white-space:nowrap;
+}
+
+.scan-zoom-controls input[type="range"]{
+  width:140px;
+  min-width:90px;
+}
+
+#scanZoomVal{
+  min-width:45px;
+  text-align:center;
+  color:#334155;
+  font-size:12px;
+  font-variant-numeric:tabular-nums;
+}
+
+.scan-toolbar-actions{
+  margin-left:0;
+}
+
+@media (max-width:1450px){
+  .scan-toolbar{
+    flex-wrap:wrap;
+  }
+
+  .scan-zoom-controls{
+    margin-left:auto;
+  }
+
+  .scan-toolbar-actions{
+    width:100%;
+    margin-left:0;
+    justify-content:flex-end;
+  }
+}
+
+@media (max-width:1000px){
+  .scan-zoom-controls{
+    width:100%;
+    margin-left:0;
+  }
+
+  .scan-zoom-controls input[type="range"]{
+    flex:1 1 auto;
+    width:auto;
+  }
+}
+
+
+/* ============================================================
+   V14.5.1 — 放大後頂端可完整捲動
+   ============================================================ */
+/*
+  不再用 flex align-items:center 置中超大 canvas。
+  超過工作區時，marginTop 會由 JS 設為 0；
+  小於工作區時，才用正值 marginTop 保持垂直置中。
+*/

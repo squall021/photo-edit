@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f6f7f5" />
+    <meta name="description" content="在瀏覽器中私密編輯單張或多張大頭照，支援裁切、色彩調整、自動去背及下載。" />
+    <title>像片所 Photo Studio｜照片編輯器</title>
+    <script type="module" crossorigin src="/photo-edit/assets/index-C6tOy41P.js"></script>
+    <link rel="stylesheet" crossorigin href="/photo-edit/assets/index-BAgygroB.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="像片所首頁">
+          <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+          <span><strong>像片所</strong><small>PHOTO STUDIO</small></span>
+        </a>
+        <div class="topbar-center"><span class="privacy-dot"></span>照片僅在此瀏覽器處理</div>
+        <div class="topbar-actions">
+          <button class="button button-quiet" id="undo-button" type="button" title="復原 Ctrl+Z" disabled>↶ <span>復原</span></button>
+          <button class="button button-quiet" id="redo-button" type="button" title="重做 Ctrl+Shift+Z" disabled>↷ <span>重做</span></button>
+          <span class="topbar-divider"></span>
+          <button class="button button-outline" id="compare-button" type="button" disabled>原圖比較</button>
+          <button class="button button-primary" id="download-current" type="button" disabled>下載照片 <span aria-hidden="true">↓</span></button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <aside class="queue-panel" aria-label="照片佇列">
+          <div class="panel-heading">
+            <div><span class="eyebrow">工作區</span><h1>照片佇列 <span class="count-badge" id="photo-count">0</span></h1></div>
+            <button class="clear-all-button" id="clear-all" type="button" title="刪除佇列中的所有照片" aria-label="刪除全部照片" disabled><span aria-hidden="true">⌫</span><span>刪除全部</span></button>
+          </div>
+          <button class="button button-upload" id="upload-button" type="button"><span class="upload-plus">＋</span>新增照片</button>
+          <button class="button button-outline scan-entry" id="scan-open" type="button">▦ 掃描圖擷取多張照片</button>
+          <input id="file-input" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden />
+          <div class="queue-caption"><span>已加入的照片</span><span id="queue-total">0 / 30</span></div>
+          <div class="draft-status" id="draft-status" role="status" aria-live="polite">正在確認本機進度…</div>
+          <div class="queue-selection"><button class="text-button" id="queue-select-all" type="button">全選</button><button class="text-button" id="queue-select-none" type="button">全不選</button><span id="queue-selected-count">已選 0 張</span></div>
+          <div class="photo-list" id="photo-list" aria-live="polite" aria-label="已加入的照片" tabindex="0"></div>
+          <div class="queue-footer">
+            <div class="privacy-card"><span class="privacy-icon">⌑</span><div><strong>隱私優先</strong><p>原始照片不會上傳或保存到伺服器。</p></div></div>
+            <p class="format-note">支援 JPG、PNG、WebP<br />單張最大 25 MB</p>
+          </div>
+        </aside>
+
+        <section class="editor-panel" aria-label="照片預覽與編輯">
+          <div class="editor-heading">
+            <div class="editor-title"><span class="eyebrow">PHOTO EDITOR</span><h2 id="active-filename">開始你的照片編輯</h2></div>
+            <div class="canvas-actions">
+              <span class="status-pill" id="edit-status"><span class="status-dot"></span>尚未編輯</span>
+              <button class="button button-outline" id="download-all" type="button" disabled>下載全部 ZIP</button>
+            </div>
+          </div>
+
+          <div class="empty-state" id="empty-state">
+            <div class="empty-illustration" aria-hidden="true"><div class="photo-card"><span class="sun"></span><span class="hills"></span><span class="person"></span></div><span class="spark spark-one">✳</span><span class="spark spark-two">✦</span></div>
+            <h2>準備好整理你的照片了嗎？</h2>
+            <p>選擇一張或多張照片，開始裁切、調整色彩，或套用自動證件照流程。</p>
+            <button class="button button-primary button-large" id="empty-upload" type="button">選擇照片 <span aria-hidden="true">↑</span></button>
+            <span class="empty-support">支援 JPG、PNG、WebP，單張最大 25 MB</span>
+          </div>
+
+          <div class="editor-body" id="editor-body" hidden>
+            <div class="canvas-toolbar">
+              <div class="tool-group">
+                <button class="tool-button" id="rotate-left" type="button" title="逆時針旋轉 90 度">↶ <span>左轉</span></button>
+                <button class="tool-button" id="rotate-right" type="button" title="順時針旋轉 90 度">↷ <span>右轉</span></button>
+                <span class="tool-divider"></span>
+                <button class="tool-button" id="crop-mode" type="button" aria-pressed="false">⌗ <span>拖曳裁切框</span></button>
+                <button class="tool-button" id="heal-mode" type="button" aria-pressed="false">✧ <span>修補瑕疵</span></button>
+              </div>
+              <div class="zoom-label" id="canvas-hint">拖曳框內移動，拉動四角調整裁切大小</div>
+            </div>
+            <div class="view-toolbar" role="group" aria-label="預覽顯示控制">
+              <button class="tool-button fit-button" id="fit-view" type="button" title="完整顯示照片並置中，不改變裁切範圍">⛶ <span>適合畫面</span></button>
+              <div class="view-zoom" title="相對於適合畫面的倍率；不影響下載尺寸">
+                <span class="view-label">預覽</span>
+                <button class="icon-button" id="zoom-out" type="button" aria-label="縮小預覽">−</button>
+                <output id="zoom-value" aria-label="預覽倍率" aria-live="polite">100%</output>
+                <button class="icon-button" id="zoom-in" type="button" aria-label="放大預覽">＋</button>
+              </div>
+              <button class="tool-button" id="pan-mode" type="button" aria-pressed="false" title="拖曳查看放大照片的其他位置">✥ <span>移動畫面</span></button>
+            </div>
+            <div class="stage-wrap" id="stage-wrap">
+              <div class="stage-grid" aria-hidden="true"></div>
+              <canvas id="photo-canvas" aria-label="照片編輯預覽"></canvas>
+              <div class="stage-tag" id="compare-tag" hidden>原始照片</div>
+              <div class="processing-overlay" id="processing-overlay" hidden>
+                <span class="spinner"></span><strong id="processing-label">正在處理照片</strong>
+                <div class="progress-track"><span id="processing-progress"></span></div>
+                <small id="processing-caption">照片不會離開你的裝置</small>
+                <button class="button button-outline" id="cancel-background-batch" type="button" hidden>停止批次去背</button>
+              </div>
+            </div>
+            <div class="canvas-footer"><span id="dimensions-label">原始尺寸 —</span><span>裁切框為下載範圍 · 預覽縮放不影響成品</span></div>
+          </div>
+        </section>
+
+        <aside class="tools-panel" aria-label="編輯工具">
+          <div class="tools-heading"><span class="eyebrow">EDIT TOOLS</span><h2>快速處理</h2><p>先選擇尺寸，再細調每張照片。</p></div>
+          <div class="tool-section auto-section">
+            <div class="section-heading"><span class="section-icon auto-icon">✦</span><div><strong>自動證件照</strong><small>套用尺寸、去背及基本色彩</small></div></div>
+            <label class="field-label" for="photo-preset">照片尺寸</label>
+            <select class="select-control" id="photo-preset">
+              <option value="two">台灣常見二吋 · 3.5 × 4.5 cm</option>
+              <option value="one">台灣常見一吋 · 2.8 × 3.5 cm</option>
+              <option value="member">會員照 · 2.1 × 2.3 cm</option>
+              <option value="square">會員照 · 正方形 1:1</option>
+              <option value="free">自由裁切 · 原始比例</option>
+            </select>
+            <label class="field-label" for="photo-purpose">編輯用途</label>
+            <select class="select-control" id="photo-purpose">
+              <option value="portrait">一般形象照</option>
+              <option value="official">正式證件照（尺寸整理）</option>
+            </select>
+            <p class="fine-print purpose-warning" id="purpose-warning" hidden>正式證件照模式會停用修飾與背景修改，並重設本次編輯。請使用未修圖原檔，送件前仍須核對受理單位規定。</p>
+            <button class="button button-primary button-full" id="auto-current" type="button" disabled>自動處理這張照片</button>
+            <button class="button button-light button-full" id="auto-all" type="button" disabled>套用至全部照片</button>
+            <p class="fine-print">自動處理會在本機執行；支援臉部偵測的瀏覽器會自動拉正，其他情況可手動調整。首次使用會下載模型檔。</p>
+          </div>
+
+          <div class="tool-section">
+            <div class="section-heading"><span class="section-icon crop-icon">⌗</span><div><strong>構圖與轉正</strong><small>調整裁切比例與角度</small></div></div>
+            <label class="field-label" for="crop-preset">裁切比例</label>
+            <select class="select-control" id="crop-preset">
+              <option value="two">二吋 · 7:9</option>
+              <option value="one">一吋 · 4:5</option>
+              <option value="member">會員照 · 2.1 × 2.3 cm</option>
+              <option value="square">會員照 · 正方形 1:1</option>
+              <option value="free">自由比例</option>
+            </select>
+            <button class="button button-light button-full" id="auto-frame-current" type="button" disabled>依人像重新建議裁切</button>
+            <p class="fine-print" id="auto-frame-note">自動處理會依所選尺寸逐張建議構圖；手動移動過的裁切框會保留。</p>
+            <div class="range-heading"><label for="straighten">水平拉正</label><output id="straighten-value">0°</output></div>
+            <input class="range-control" id="straighten" type="range" min="-15" max="15" value="0" step="0.5" />
+          </div>
+
+          <div class="tool-section">
+            <div class="section-heading"><span class="section-icon color-icon">◒</span><div><strong>色彩調整</strong><small>細緻調整照片明暗與色調</small></div></div>
+            <div class="range-heading"><label for="brightness">亮度</label><output id="brightness-value">100</output></div>
+            <input class="range-control" id="brightness" type="range" min="70" max="130" value="100" />
+            <div class="range-heading"><label for="contrast">對比</label><output id="contrast-value">100</output></div>
+            <input class="range-control" id="contrast" type="range" min="70" max="130" value="100" />
+            <div class="range-heading"><label for="saturation">飽和度</label><output id="saturation-value">100</output></div>
+            <input class="range-control" id="saturation" type="range" min="0" max="140" value="100" />
+            <button class="text-button" id="reset-color" type="button" disabled>重設色彩</button>
+          </div>
+
+          <div class="tool-section">
+            <div class="section-heading"><span class="section-icon bg-icon">▧</span><div><strong>背景與修補</strong><small>移除背景或修整小瑕疵</small></div></div>
+            <button class="button button-light button-full" id="remove-background" type="button" disabled>✦　自動去除背景</button>
+            <div class="batch-background">
+              <label class="field-label" for="background-scope">批次去背範圍</label>
+              <select class="select-control" id="background-scope"><option value="selected">勾選的照片</option><option value="all">全部照片</option></select>
+              <label class="check-label"><input type="checkbox" id="background-replace" />重新處理已去背的照片</label>
+              <button class="button button-outline button-full" id="background-batch" type="button" disabled>批次去背</button>
+              <button class="text-button" id="background-retry" type="button" disabled>重試範圍內失敗項目</button>
+              <p class="fine-print" id="background-summary" role="status">依序處理勾選照片，正式證件照會略過。</p>
+              <progress id="background-progress" max="100" value="0" hidden aria-label="批次去背進度"></progress>
+              <div id="background-review" hidden><p class="fine-print">去背完成，請查看頭髮與肩膀邊緣。</p><button class="text-button" id="background-reviewed" type="button">這張已檢查</button><button class="text-button" id="background-next" type="button">查看下一張待檢查</button></div>
+            </div>
+            <div class="field-label background-label">背景顏色</div>
+            <div class="swatch-row" role="group" aria-label="背景顏色">
+              <button class="color-swatch swatch-white selected" type="button" data-color="#ffffff" aria-label="白色背景" aria-pressed="true"><span></span></button>
+              <button class="color-swatch swatch-blue" type="button" data-color="#dce8f2" aria-label="淺藍背景" aria-pressed="false"><span></span></button>
+              <button class="color-swatch swatch-gray" type="button" data-color="#e7e8e6" aria-label="淺灰背景" aria-pressed="false"><span></span></button>
+              <button class="color-swatch swatch-transparent" type="button" data-color="transparent" aria-label="透明背景" aria-pressed="false"><span></span></button>
+              <label class="color-swatch custom-swatch" title="自訂背景色"><input id="custom-background" type="color" value="#ffffff" aria-label="選擇自訂背景色" /><span>＋</span></label>
+            </div>
+            <div class="brush-settings"><div class="range-heading"><label for="brush-size">修補筆刷大小</label><output id="brush-value">10</output></div><input class="range-control" id="brush-size" type="range" min="6" max="48" value="10" /></div>
+            <p class="fine-print">修補工具適合小污點或短暫痘痘；正式證件照請先確認受理機關規範。</p>
+          </div>
+
+          <div class="tool-section export-section">
+            <div class="section-heading"><span class="section-icon export-icon">↓</span><div><strong>輸出設定</strong><small>下載單張或整批照片</small></div></div>
+            <label class="field-label" for="output-format">檔案格式</label>
+            <select class="select-control" id="output-format"><option value="image/jpeg">JPG · 適合一般用途</option><option value="image/png">PNG · 支援透明背景</option></select>
+            <div class="export-size" id="export-size">匯出尺寸依所選範本設定</div>
+            <button class="button button-primary button-full" id="download-current-bottom" type="button" disabled>下載目前照片　↓</button>
+            <button class="button button-outline button-full" id="download-all-bottom" type="button" disabled>下載全部 ZIP</button>
+          </div>
+          <div class="notice-card"><strong>正式證件照片提醒</strong><p>台灣部分證件禁止修圖或數位潤飾。尺寸工具僅供裁切參考，送件前請核對最新規格。</p></div>
+        </aside>
+      </main>
+      <dialog class="clear-confirm-dialog" id="clear-confirm-dialog" aria-labelledby="clear-confirm-title" aria-describedby="clear-confirm-description">
+        <form method="dialog" class="confirm-dialog-content">
+          <span class="eyebrow">清除照片</span>
+          <h2 id="clear-confirm-title">刪除全部照片？</h2>
+          <p id="clear-confirm-description">佇列中的照片、尚未下載的編輯成果與本機保存進度會一併移除。這項操作無法復原。</p>
+          <div class="confirm-dialog-actions">
+            <button class="button button-outline" type="submit" value="cancel">取消</button>
+            <button class="button button-primary" id="confirm-clear-all" type="submit" value="confirm">刪除全部照片</button>
+          </div>
+        </form>
+      </dialog>
+      <dialog class="draft-restore-dialog" id="draft-restore-dialog" aria-labelledby="draft-restore-title" aria-describedby="draft-restore-description">
+        <div class="confirm-dialog-content">
+          <span class="eyebrow">本機進度</span>
+          <h2 id="draft-restore-title">要恢復上次編輯嗎？</h2>
+          <p id="draft-restore-description"></p>
+          <p class="fine-print">照片保存在此裝置的瀏覽器資料中，不會同步到其他裝置。</p>
+          <div class="confirm-dialog-actions">
+            <button class="button button-outline" id="draft-discard" type="button">刪除上次進度</button>
+            <button class="button button-primary" id="draft-resume" type="button">恢復進度</button>
+          </div>
+        </div>
+      </dialog>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </div>
+  </body>
+</html>

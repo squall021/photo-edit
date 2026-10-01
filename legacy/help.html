@@ -1,0 +1,754 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>會員照片標準化工作站 V14.5.1.1｜操作教學</title>
+<style>
+:root{
+  --bg:#f3f6fb;
+  --panel:#ffffff;
+  --line:#dce3ec;
+  --text:#172033;
+  --muted:#64748b;
+  --blue:#2563eb;
+  --blue2:#1d4ed8;
+  --green:#059669;
+  --amber:#d97706;
+  --red:#dc2626;
+  --navw:260px;
+  --radius:14px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  color:var(--text);
+  background:var(--bg);
+  font-family:"Segoe UI","Microsoft JhengHei","Noto Sans TC",Arial,sans-serif;
+  line-height:1.65;
+}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+.topbar{
+  position:sticky;
+  top:0;
+  z-index:30;
+  display:flex;
+  align-items:center;
+  gap:16px;
+  min-height:64px;
+  padding:10px 22px;
+  border-bottom:1px solid var(--line);
+  background:rgba(255,255,255,.96);
+  backdrop-filter:blur(8px);
+}
+.brand{min-width:0}
+.brand strong{display:block;font-size:18px}
+.brand span{display:block;color:var(--muted);font-size:12px}
+.top-actions{
+  margin-left:auto;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:38px;
+  padding:7px 12px;
+  border:1px solid #cbd5e1;
+  border-radius:9px;
+  background:#fff;
+  color:var(--text);
+  font-weight:700;
+  font-size:13px;
+  text-decoration:none;
+  white-space:nowrap;
+}
+.btn:hover{background:#f8fafc;text-decoration:none}
+.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.layout{
+  display:grid;
+  grid-template-columns:var(--navw) minmax(0,1fr);
+  min-height:calc(100vh - 64px);
+}
+.sidebar{
+  position:sticky;
+  top:64px;
+  align-self:start;
+  height:calc(100vh - 64px);
+  overflow:auto;
+  padding:18px 14px 28px;
+  border-right:1px solid var(--line);
+  background:#fff;
+}
+.nav-title{
+  margin:0 8px 8px;
+  color:var(--muted);
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.08em;
+}
+.sidebar a{
+  display:block;
+  margin:2px 0;
+  padding:8px 10px;
+  border-radius:8px;
+  color:#334155;
+  font-size:13px;
+  font-weight:650;
+}
+.sidebar a:hover{
+  background:#eff6ff;
+  color:var(--blue2);
+  text-decoration:none;
+}
+main{
+  width:min(1120px,calc(100% - 40px));
+  margin:0 auto;
+  padding:28px 0 64px;
+}
+.hero{
+  padding:26px 28px;
+  border:1px solid #bfdbfe;
+  border-radius:18px;
+  background:linear-gradient(135deg,#eff6ff,#ffffff 60%);
+  box-shadow:0 10px 28px rgba(15,23,42,.05);
+}
+.hero h1{margin:0 0 8px;font-size:30px;line-height:1.2}
+.hero p{margin:0;color:#475569}
+.hero-flow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+  margin-top:18px;
+}
+.flow{
+  padding:7px 10px;
+  border:1px solid #bfdbfe;
+  border-radius:999px;
+  background:#fff;
+  color:#1e40af;
+  font-size:12px;
+  font-weight:750;
+}
+.section{
+  scroll-margin-top:82px;
+  margin-top:22px;
+  padding:22px 24px;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:var(--panel);
+}
+.section h2{margin:0 0 14px;font-size:21px}
+.section h3{margin:20px 0 8px;font-size:16px}
+.section p{margin:7px 0;color:#475569}
+.section ul,.section ol{margin:8px 0 0;padding-left:22px}
+.section li{margin:5px 0}
+.grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+}
+.card{
+  padding:15px;
+  border:1px solid #e2e8f0;
+  border-radius:11px;
+  background:#fff;
+}
+.card strong{display:block;margin-bottom:4px}
+.card p{margin:0;font-size:13px}
+.callout{
+  margin-top:14px;
+  padding:12px 14px;
+  border-radius:10px;
+  border:1px solid #bfdbfe;
+  background:#eff6ff;
+  color:#1e3a8a;
+  font-size:13px;
+}
+.callout.green{border-color:#bbf7d0;background:#f0fdf4;color:#166534}
+.callout.amber{border-color:#fde68a;background:#fffbeb;color:#92400e}
+.table-wrap{overflow:auto}
+table{
+  width:100%;
+  border-collapse:collapse;
+  margin-top:10px;
+  font-size:13px;
+}
+th,td{
+  padding:9px 10px;
+  border:1px solid #e2e8f0;
+  text-align:left;
+  vertical-align:top;
+}
+th{background:#f8fafc}
+.badge{
+  display:inline-block;
+  padding:2px 7px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:800;
+}
+.badge.pass{background:#ecfdf5;color:#047857}
+.badge.warn{background:#fffbeb;color:#b45309}
+.badge.fail{background:#fef2f2;color:#b91c1c}
+.code{
+  display:inline-block;
+  padding:1px 6px;
+  border-radius:6px;
+  background:#f1f5f9;
+  color:#0f172a;
+  font-family:Consolas,monospace;
+  font-size:.92em;
+}
+.steps{
+  counter-reset:step;
+  display:grid;
+  gap:10px;
+}
+.step{
+  display:grid;
+  grid-template-columns:38px minmax(0,1fr);
+  gap:11px;
+  align-items:start;
+  padding:12px;
+  border:1px solid #e2e8f0;
+  border-radius:10px;
+}
+.step:before{
+  counter-increment:step;
+  content:counter(step);
+  width:34px;height:34px;
+  display:grid;place-items:center;
+  border-radius:999px;
+  background:#eff6ff;
+  color:#1d4ed8;
+  font-weight:900;
+}
+.step strong{display:block;margin-top:2px}
+.small{color:var(--muted);font-size:12px}
+.footer{
+  margin-top:26px;
+  padding:18px 0;
+  color:var(--muted);
+  text-align:center;
+  font-size:12px;
+}
+@media(max-width:900px){
+  .layout{grid-template-columns:1fr}
+  .sidebar{display:none}
+  main{width:min(100% - 24px,1120px);padding-top:16px}
+  .grid{grid-template-columns:1fr}
+  .hero h1{font-size:24px}
+}
+@media(max-width:620px){
+  .topbar{padding:9px 12px}
+  .brand span{display:none}
+  .top-actions .secondary{display:none}
+  .section,.hero{padding:17px}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <strong>會員照片標準化工作站 V14.5.1.1</strong>
+    <span>操作教學與批次處理說明</span>
+  </div>
+  <div class="top-actions">
+    <a class="btn secondary" href="#quick-start">快速開始</a>
+    <a class="btn primary" href="./index.html">返回圖片編輯器</a>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="sidebar">
+    <div class="nav-title">操作教學</div>
+    <a href="#overview">功能總覽</a>
+    <a href="#quick-start">快速開始</a>
+    <a href="#scan-split">掃描表拆圖</a>
+    <a href="#interface">介面說明</a>
+    <a href="#standardize">一鍵標準化</a>
+    <a href="#quality">品質檢查</a>
+    <a href="#straighten">自動轉正</a>
+    <a href="#manual-straighten">手動轉正</a>
+    <a href="#cleanup">智慧去污</a>
+    <a href="#background">人物去背與遮罩細修</a>
+    <a href="#crop">裁切功能</a>
+    <a href="#batch">批次工作流程</a>
+    <a href="#filename">批次檔名</a>
+    <a href="#session">工作階段儲存</a>
+    <a href="#compare">修改前／後比較</a>
+    <a href="#export">輸出與 ZIP</a>
+    <a href="#ai">AI 引擎</a>
+    <a href="#faq">常見問題</a>
+  </nav>
+
+  <main>
+    <section class="hero" id="overview">
+      <h1>會員照片標準化工作站 V13</h1>
+      <p>
+        V14 的核心除了會員照標準化，也加入整張掃描表自動拆圖，
+        再透過品質檢查找出真正需要人工確認的照片。
+      </p>
+      <div class="hero-flow">
+        <span class="flow">加入照片</span>
+        <span class="flow">自動轉正</span>
+        <span class="flow">會員照裁切</span>
+        <span class="flow">智慧提亮</span>
+        <span class="flow">去污／去背</span>
+        <span class="flow">品質檢查</span>
+        <span class="flow">人工確認</span>
+        <span class="flow">輸出</span>
+      </div>
+    </section>
+
+    <section class="section" id="quick-start">
+      <h2>快速開始</h2>
+      <div class="steps">
+        <div class="step">
+          <div><strong>加入照片</strong><p>單張處理按「上傳照片」；大量照片切到上方「批次」分頁後，按「加入多張照片」。</p></div>
+        </div>
+        <div class="step">
+          <div><strong>先用「✨ 一鍵標準化」</strong><p>系統會依序處理方向、會員照 2.1 × 2.3 公分裁切、亮度、背景與保守去污，最後自動執行品質檢查。</p></div>
+        </div>
+        <div class="step">
+          <div><strong>檢查品質結果</strong><p>綠色「合格」通常可直接使用；黃色「待確認」及紅色「需人工」再進行人工修正。</p></div>
+        </div>
+        <div class="step">
+          <div><strong>需要時再細修</strong><p>可使用智慧去污、手動去污筆、人物去背、遮罩細修、手動裁切與影像參數。</p></div>
+        </div>
+        <div class="step">
+          <div><strong>匯出照片</strong><p>一般白底會員照使用 JPG；透明背景請使用 PNG。批次照片可一次下載 ZIP。</p></div>
+        </div>
+      </div>
+      <div class="callout green">
+        建議：大量處理時，不需要每一張都逐張檢查。先跑批次標準化與品質檢查，再只看「待確認／需人工」照片。
+      </div>
+    </section>
+
+
+    <section class="section" id="scan-split">
+      <h2>📄 掃描表拆圖</h2>
+      <p>
+        適合把多張紙本會員照片貼在一張紙上，再整頁掃描進電腦的工作方式。
+        V14 不依賴照片外框或表格格線，而是先找整張掃描頁上的所有人臉。
+      </p>
+
+      <div class="steps">
+        <div class="step">
+          <div><strong>切到「掃描表拆圖」</strong><p>在右上方模式切換選擇第三個「掃描表拆圖」。</p></div>
+        </div>
+        <div class="step">
+          <div><strong>加入一頁或多頁掃描圖</strong><p>支援一次加入多張 JPG / PNG 掃描頁。</p></div>
+        </div>
+        <div class="step">
+          <div><strong>偵測目前頁或全部頁</strong><p>MediaPipe 會搜尋頁面上的多人臉，自動建立候選照片框。空白格、紅筆記號、格線與姓名文字通常不會被當成照片。</p></div>
+        </div>
+        <div class="step">
+          <div><strong>人工確認候選框</strong><p>漏抓時用「＋ 手動新增框」拖曳補上；誤抓可選取後刪除，也可取消候選框勾選。</p></div>
+        </div>
+        <div class="step">
+          <div><strong>全部拆分或拆分並標準化</strong><p>「全部拆分」只把候選區域變成獨立照片；「全部拆分並標準化」會直接送進會員照 2.1 × 2.3 cm 標準化及品質檢查。</p></div>
+        </div>
+      </div>
+
+      <div class="callout green">
+        V14.5.1.1 進一步處理「臉抓對，但單邊候選框拉太遠」的情況：
+        四邊加入最大延伸距離，並搜尋人臉附近的紙本照片邊緣；
+        如果某一側出現大面積純白空白會自動收邊，同一掃描頁中尺寸明顯偏大的候選框
+        也會依本頁中位尺寸修正。V14.2.1 的鄰臉、格線與拆分後多臉檢查仍全部保留。
+      </div>
+    </section>
+
+
+    <section class="section" id="scan-page-manage">
+      <h2>掃描頁加入與管理</h2>
+      <ul>
+        <li>除了按「＋ 加入掃描頁」，V14.5.1.1 也支援直接把一張或多張 JPG / PNG 拖曳到「掃描表拆圖」工作區。</li>
+        <li>每個掃描頁縮圖右下角都有垃圾桶圖示，可單獨移除該頁。</li>
+        <li>左側新增「移除全部掃描頁」，可一次清空目前加入的掃描頁。</li>
+      </ul>
+      <div class="callout green">
+        V14.5.1.1 的下邊界也改成追蹤「肩膀／衣服連續色塊」的結束位置；
+        遇到衣服與會員編號／姓名之間的空白帶就停止，不會再因下面的文字重新把候選框往下拉。
+      </div>
+    </section>
+
+
+    <section class="section" id="scan-edge-special">
+      <h2>白衣肩膀保護與文字列隔離</h2>
+      <p>
+        V14.5.1.1 針對兩種特殊情況再加保護：白色／淺色衣服，以及照片下方緊接會員編號、姓名或手寫字。
+      </p>
+      <ul>
+        <li><strong>白衣保護：</strong>若衣服與白底亮度接近，但仍有陰影與紋理，系統不會把它直接當背景；同時保留最低肩膀寬度。</li>
+        <li><strong>文字列隔離：</strong>利用「大量小型邊緣、分散筆畫、前方空白帶」辨識會員編號／姓名／手寫字，在文字列前停止候選框。</li>
+      </ul>
+    </section>
+
+
+    <section class="section" id="scan-bottom-structure">
+      <h2>照片底邊結構偵測</h2>
+      <p>
+        V14.5.1.1 不再只靠顏色判斷照片底部，而是分析「大片連續影像 → 空白帶／水平底邊 → 細碎文字」的結構轉換。
+      </p>
+      <ul>
+        <li>優先尋找衣服／肩膀連續內容結束後的第一段空白。</li>
+        <li>若照片底部或表格有明顯水平線，會優先把它當成底邊。</li>
+        <li>空白帶下方即使又出現會員編號、姓名或手寫字，也不會重新把候選框往下拉。</li>
+        <li>另加入底部最大延伸限制，作為無法可靠辨識底邊時的保險。</li>
+      </ul>
+    </section>
+
+
+    <section class="section" id="scan-adjustable-box">
+      <h2>可調式候選框</h2>
+      <p>
+        V14.5.1.1 將自動偵測定位改成「初始建議」，不要求每個框都由演算法 100% 貼齊。
+        點選任一候選框後會出現 8 個控制點。
+      </p>
+      <ul>
+        <li>拖曳四個角：同時修改兩個方向。</li>
+        <li>拖曳上、下、左、右控制點：只修改該側邊界。</li>
+        <li>拖曳候選框內部：移動整個候選框。</li>
+        <li>按「↺ 重設選取框」：回到自動偵測完成時的原始候選範圍。</li>
+        <li>手動新增的候選框也可以用相同方式調整。</li>
+      </ul>
+      <div class="callout green">
+        建議工作方式：先「偵測全部頁」，只人工修正少數明顯不理想的候選框，
+        再執行「全部拆分並標準化」。這通常比持續追求 100% 自動邊界更有效率。
+      </div>
+    </section>
+
+
+    <section class="section" id="workflow-v144">
+      <h2>V14.5.1.1 一鍵標準化流程</h2>
+      <p>若選用需要去背的流程，V14.5.1.1 起會把人物去背移到第一步。</p>
+      <ol>
+        <li><strong>去背／背景判斷：</strong>白底 Preset 會先判斷是否已接近白底；非白底先人物去背並轉白。透明 Preset 直接先透明去背。</li>
+        <li><strong>自動轉正：</strong>依雙眼 Landmark 修正小角度傾斜。</li>
+        <li><strong>會員照裁切：</strong>裁成 2.1 × 2.3 cm（21:23），使用頭頂優先定位。</li>
+        <li><strong>智慧提亮：</strong>分析亮度與色彩後調整。</li>
+        <li><strong>臉部去污：</strong>保守清理斑點／瑕疵。</li>
+        <li><strong>品質檢查：</strong>最後判定合格、待確認或需人工。</li>
+      </ol>
+      <div class="callout green">
+        「會員卡標準｜保留背景」不會執行去背，因此仍直接從轉正開始。
+      </div>
+    </section>
+
+
+    <section class="section" id="scan-zoom">
+      <h2>掃描頁縮放</h2>
+      <p>V14.5.1.1 在「掃描表拆圖」中央預覽上方加入縮放拉桿。</p>
+      <ul>
+        <li>縮放範圍：5%～250%。</li>
+        <li>「－ / ＋」每次調整 10%。</li>
+        <li>「適合視窗」會重新計算目前掃描頁最適合工作區的比例。</li>
+        <li>每一個掃描頁會記住自己的縮放比例，切換頁面後不會互相影響。</li>
+        <li>縮放只影響畫面顯示與候選框操作，不改變原掃描圖片或拆圖輸出解析度。</li>
+      </ul>
+    </section>
+
+
+    <section class="section" id="scan-zoom-overflow-fix">
+      <h2>放大後捲動範圍</h2>
+      <p>
+        V14.5.1 修正掃描頁放大後，上半部可能因「垂直置中」而跑到捲軸可到達範圍之外的問題。
+      </p>
+      <ul>
+        <li>掃描圖小於工作區時仍會置中顯示。</li>
+        <li>放大後若高度超過工作區，圖片會從可捲動區最上方開始。</li>
+        <li>把垂直捲軸拉到最上面時，可看到真正的掃描圖頂端。</li>
+        <li>水平捲動也採相同原則，放大的圖片左側不會被置中到不可達位置。</li>
+      </ul>
+    </section>
+
+    <section class="section" id="interface">
+      <h2>介面說明</h2>
+      <div class="grid">
+        <div class="card">
+          <strong>上方 Ribbon</strong>
+          <p>「常用」放單張主要工具；「批次」集中大量處理；「檢視」管理左右欄與工作階段。</p>
+        </div>
+        <div class="card">
+          <strong>左側照片欄</strong>
+          <p>單張模式顯示照片資訊；批次模式顯示照片清單及處理狀態。</p>
+        </div>
+        <div class="card">
+          <strong>中央照片工作區</strong>
+          <p>照片預覽、縮放、裁切、去污筆、遮罩細修及滑動比較都在中央操作。</p>
+        </div>
+        <div class="card">
+          <strong>右側工具欄</strong>
+          <p>影像、去污、去背、裁切、檢查及匯出等詳細設定。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="standardize">
+      <h2>✨ 一鍵會員照標準化</h2>
+      <p>這是 V14 主要的會員照自動處理功能。</p>
+      <div class="callout green">
+        V14.2 修正了裁切框縮小時的幾何問題。現在會先算出真正能放進原圖的最終
+        21:23 裁切尺寸，再以實際最終高度重新計算頭頂位置，因此即使原圖較窄、
+        或下方空間不足，頭頂留白仍會維持約 5%～6%，不會因為裁切框縮小而變成 20%～30%。
+      </div>
+
+      <div class="callout green">
+        V13.5 起，「✨ 一鍵標準化」、會員照裁切建議與批次自動化會員照裁切的裁切基準統一為 <strong>會員照 2.1 × 2.3 公分</strong>；
+        V13.5 起，獨立的「會員照裁切建議」也改為 2.1 × 2.3 公分，與一鍵標準化及批次自動化會員照裁切統一。
+      </div>
+      <ol>
+        <li>以 MediaPipe 人臉 Landmark 分析左右眼並自動轉正。</li>
+        <li>建立會員照 2.1 × 2.3 公分（21:23）比例裁切。</li>
+        <li>調整頭頂至下顎約占照片高度 70%～80%。</li>
+        <li>智慧分析亮度、對比、飽和度與銳化。</li>
+        <li>檢查背景；會員卡白底模式下，必要時才執行人物去背。</li>
+        <li>進行保守的臉部斑點／瑕疵清理。</li>
+        <li>完成後執行 V13 品質檢查。</li>
+      </ol>
+      <div class="callout amber">
+        系統刻意採保守原則：寧可留下少量瑕疵，也不要誤修眼睛、鼻子、嘴巴、髮際線等重要結構。
+      </div>
+    </section>
+
+    <section class="section" id="quality">
+      <h2>✓ 照片品質檢查</h2>
+      <p>品質檢查的目的不是只給分數，而是幫你快速判斷哪些照片可以直接使用、哪些需要人工確認。</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>檢查項目</th><th>內容</th><th>結果</th></tr></thead>
+          <tbody>
+            <tr><td>會員照比例</td><td>確認是否接近 2.1 : 2.3（21:23）</td><td><span class="badge pass">合格</span> / 警告</td></tr>
+            <tr><td>人臉數量</td><td>會員照原則上只應有一張臉</td><td>1 人最佳</td></tr>
+            <tr><td>頭部比例</td><td>頭頂至下顎占照片高度</td><td>目標 70%～80%</td></tr>
+            <tr><td>頭頂留白</td><td>檢查頭頂與照片上緣的留白比例</td><td>越接近中央越佳</td></tr>
+            <tr><td>臉部歪斜</td><td>以雙眼 Landmark 判斷</td><td>±2° 內最佳</td></tr>
+            <tr><td>頭頂留白</td><td>避免切到頭頂或留白太多</td><td>依照片自動判斷</td></tr>
+            <tr><td>解析度</td><td>會員照 2.1 × 2.3 cm、300dpi 約需 248 × 272 px</td><td>不足會警告</td></tr>
+            <tr><td>清晰度</td><td>分析影像邊緣／細節</td><td>良好 / 稍模糊 / 偏模糊</td></tr>
+            <tr><td>背景</td><td>檢查白底比例或透明背景</td><td>白底／透明可直接通過</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>品質狀態</h3>
+      <p><span class="badge pass">✓ 合格</span>：通常可直接輸出。</p>
+      <p><span class="badge warn">⚠ 待確認</span>：建議人工看一下，但不一定需要修改。</p>
+      <p><span class="badge fail">✕ 需人工</span>：有明顯問題，例如無法偵測人臉、比例不符或過度模糊。</p>
+    </section>
+
+    <section class="section" id="straighten">
+      <h2>↔ 自動轉正</h2>
+      <p>
+        V13 會利用左右眼 Landmark 計算照片的傾斜角度。小角度歪斜可自動修正，
+        比只提供 90° 左右旋轉更適合證件照。
+      </p>
+      <div class="callout">
+        若偵測到的角度太大，系統不會強行旋轉，而會提示人工確認，以避免錯誤判斷。
+      </div>
+    </section>
+
+
+    <section class="section" id="manual-straighten">
+      <h2>手動轉正</h2>
+      <p>
+        如果自動轉正的結果不符合需求，或照片只是非常輕微地歪斜，可以到右側
+        「影像」→「影像調整」使用手動轉正。
+      </p>
+      <ul>
+        <li>角度範圍：−15°～+15°。</li>
+        <li>最小調整單位：0.1°。</li>
+        <li>可使用 −0.5° / 歸零 / +0.5° 按鈕進行細部微調。</li>
+        <li>拖曳角度時中央照片只做即時預覽，不會反覆修改原始像素。</li>
+        <li>確認後按「套用手動轉正」，系統才會真正旋轉照片並加入復原紀錄。</li>
+        <li>按「取消預覽」或「歸零」即可回到尚未旋轉的狀態。</li>
+      </ul>
+      <div class="callout green">
+        建議先使用「自動轉正」，如果仍有約 0.5°～3° 的視覺偏差，再使用手動轉正微調。
+      </div>
+    </section>
+
+    <section class="section" id="cleanup">
+      <h2>智慧去污</h2>
+      <h3>臉部斑點／青春痘</h3>
+      <p>使用 MediaPipe 人臉範圍與眼睛、眉毛、鼻子、嘴唇等保護區，盡量只處理安全的皮膚區域。</p>
+      <h3>照片灰塵／小型損傷</h3>
+      <p>使用「孤立斑點＋邊緣保護」分析，降低把髮絲、臉部輪廓或衣服邊界誤判成灰塵的情形。</p>
+      <h3>手動去污筆</h3>
+      <p>需要更精細處理時，可以放大照片後使用手動去污筆局部修補。</p>
+    </section>
+
+    <section class="section" id="background">
+      <h2>人物去背與遮罩細修</h2>
+      <p>右側「去背」可選擇白色背景或透明背景。</p>
+      <div class="grid">
+        <div class="card">
+          <strong>白色背景</strong>
+          <p>適合會員證、證件照與一般 JPG 輸出。</p>
+        </div>
+        <div class="card">
+          <strong>透明背景</strong>
+          <p>保留 Alpha 透明資訊，請使用 PNG 下載。</p>
+        </div>
+      </div>
+      <h3>遮罩細修</h3>
+      <p>如果 AI 去背吃掉頭髮、耳朵或肩膀，可按「分析並顯示遮罩」後使用：</p>
+      <ul>
+        <li><strong>＋ 保留人物</strong>：把被錯誤刪除的區域補回。</li>
+        <li><strong>－ 移除背景</strong>：把殘留背景擦除。</li>
+        <li><strong>遮罩筆刷</strong>：可依細節大小調整筆刷。</li>
+      </ul>
+    </section>
+
+    <section class="section" id="crop">
+      <h2>裁切功能</h2>
+      <div class="callout green">
+        V13.5 起，「會員照裁切建議」與批次「自動化會員照裁切」都使用
+        <strong>2.1 × 2.3 公分（21:23）</strong>。裁切比例選單中的
+        2 吋 3.5 × 4.5 公分仍保留，只有手動選用時才會使用。
+      </div>
+      <p>支援手動裁切及自動化會員照裁切裁切建議。</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>比例</th><th>用途</th></tr></thead>
+          <tbody>
+            <tr><td>3.5 : 4.5</td><td>台灣 2 吋大頭照</td></tr>
+            <tr><td>2.1 : 2.3</td><td>會員照 2.1 × 2.3 公分</td></tr>
+            <tr><td>9 : 16</td><td>直式社群／手機畫面</td></tr>
+            <tr><td>4 : 5</td><td>一般直式照片</td></tr>
+            <tr><td>其他</td><td>依工具選單提供的比例使用</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>進入裁切後，「確認並完成裁切」會浮在照片工作區上方，不會推動照片位置。</p>
+      <div class="callout">
+        「會員照 2.1 × 2.3 公分」會鎖定為 21:23 的裁切比例。裁切本身保留原照片像素；
+        若要輸出成指定 DPI 的固定像素尺寸，可再搭配右側「輸出尺寸」設定。
+      </div>
+    </section>
+
+    <section class="section" id="batch">
+      <h2>批次工作流程</h2>
+      <p>大量照片建議直接使用批次模式，而不是逐張重複按每一個工具。</p>
+      <h3>批次 Preset</h3>
+      <div class="grid">
+        <div class="card"><strong>會員卡標準｜白底</strong><p>必要時先去背／白底 → 轉正 → 會員照 2.1 × 2.3 裁切 → 提亮 → 去污 → 品質檢查。</p></div>
+        <div class="card"><strong>會員卡標準｜保留背景</strong><p>保留原背景，其餘依會員照流程處理。</p></div>
+        <div class="card"><strong>只做會員照裁切</strong><p>只裁切為 2.1 × 2.3 公分比例，不變更亮度、背景與臉部。</p></div>
+        <div class="card"><strong>會員卡標準｜透明背景</strong><p>完成標準化後保留透明背景，批次 ZIP 將以 PNG 輸出。</p></div>
+      </div>
+      <h3>批次狀態</h3>
+      <p>左側照片會依工作狀態標示：</p>
+      <ul>
+        <li>未處理</li>
+        <li>處理中</li>
+        <li><span class="badge pass">合格</span></li>
+        <li><span class="badge warn">待確認</span></li>
+        <li><span class="badge fail">需人工</span></li>
+        <li>已完成</li>
+      </ul>
+      <div class="callout green">
+        建議做法：整批跑完後，把狀態篩選切到「待確認」及「需人工」，只檢查這些照片即可。
+      </div>
+    </section>
+
+    <section class="section" id="filename">
+      <h2>批次檔名</h2>
+      <p>右側「匯出」可設定批次檔名規則：</p>
+      <ul>
+        <li>原檔名_edited</li>
+        <li>序號_原檔名</li>
+        <li>使用匯入／手動名稱</li>
+        <li>自訂範本</li>
+      </ul>
+      <p>自訂範本支援：</p>
+      <p>
+        <span class="code">{index}</span>
+        <span class="code">{original}</span>
+        <span class="code">{date}</span>
+        <span class="code">{status}</span>
+      </p>
+      <p>也可在左側批次區匯入 TXT / CSV 名稱清單，依照片順序套用名稱。</p>
+    </section>
+
+    <section class="section" id="session">
+      <h2>工作階段自動儲存與恢復</h2>
+      <p>V13 使用瀏覽器 IndexedDB 保存工作階段，不需要後端伺服器。</p>
+      <ul>
+        <li>一般編輯約 4 秒防抖後自動儲存。</li>
+        <li>AI 或批次處理執行期間會暫緩儲存，降低效能干擾。</li>
+        <li>重新開啟同一個網站時，可選擇「繼續上次工作」。</li>
+        <li>「檢視」Ribbon 也提供手動「儲存」與「清除儲存」。</li>
+      </ul>
+      <div class="callout amber">
+        工作階段保存在目前瀏覽器。若清除網站資料、使用其他瀏覽器或其他電腦，不會自動帶過去。
+      </div>
+    </section>
+
+    <section class="section" id="compare">
+      <h2>修改前／後比較</h2>
+      <p>提供兩種比較方式：</p>
+      <ul>
+        <li><strong>按住看修改前</strong>：按住按鈕暫時顯示原始照片。</li>
+        <li><strong>◫ 滑動比較</strong>：中央會顯示分隔線，可以左右拖曳比較修改前與修改後。</li>
+      </ul>
+    </section>
+
+    <section class="section" id="export">
+      <h2>輸出與批次 ZIP</h2>
+      <div class="grid">
+        <div class="card">
+          <strong>JPG</strong>
+          <p>適合白底會員照。若來源含透明區域，JPG 會以白色填補。</p>
+        </div>
+        <div class="card">
+          <strong>PNG</strong>
+          <p>適合透明背景，會保留 Alpha 透明資訊。</p>
+        </div>
+      </div>
+      <p>批次 ZIP 可混合 JPG 與 PNG：一般／白底照片輸出 JPG，透明背景照片輸出 PNG。</p>
+    </section>
+
+    <section class="section" id="ai">
+      <h2>AI 引擎與效能</h2>
+      <p>右側「檢查」頁面可以查看 AI 引擎狀態。</p>
+      <ul>
+        <li><strong>Face Landmarker</strong>：人臉 Landmark、會員照／2 吋裁切、自動轉正、臉部去污與品質檢查。</li>
+        <li><strong>Image Segmenter</strong>：人物去背。V13 採需要時才載入。</li>
+      </ul>
+      <p>如果大量去背後記憶體使用量偏高，可按「釋放去背引擎記憶體」。下次再使用去背時會重新載入模型。</p>
+    </section>
+
+    <section class="section" id="faq">
+      <h2>常見問題</h2>
+
+      <h3>Q：照片會上傳到伺服器嗎？</h3>
+      <p>目前主要影像編輯是在瀏覽器端進行。MediaPipe 的 JS / WASM 與模型檔會從網路載入，但你選取的照片不需要另外建立照片上傳 API。</p>
+
+      <h3>Q：為什麼第一次使用 AI 功能比較慢？</h3>
+      <p>瀏覽器需要下載及初始化 MediaPipe 模型。之後同一個瀏覽器通常會利用快取加快載入。</p>
+
+      <h3>Q：透明背景下載 JPG 為什麼變白色？</h3>
+      <p>JPG 不支援透明 Alpha，因此系統會自動使用白色填補。需要透明請下載 PNG。</p>
+
+      <h3>Q：批次處理某張失敗會整批停止嗎？</h3>
+      <p>設計上會盡量只把該張標示為「需人工」，其餘照片繼續處理。</p>
+
+      <h3>Q：品質檢查顯示「待確認」一定要修改嗎？</h3>
+      <p>不一定。黃色代表某些指標接近邊界，建議人工看一下；如果照片實際視覺效果正常，可以直接標記完成。</p>
+    </section>
+
+    <div class="footer">
+      會員照片標準化工作站 V13 操作教學｜與圖片編輯器放在同一個 GitHub Pages 專案即可
+    </div>
+        <div class="callout green">V14.5.1.1 新增下半部衣服／肩膀導向收邊。</div>
+    </main>
+</div>
+</body>
+</html>
